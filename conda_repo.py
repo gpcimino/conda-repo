@@ -8,7 +8,6 @@ import shutil
 import argparse
 import logging
 import logging.config
-from functools import partial
 
 import yaml
 from path import Path
@@ -55,14 +54,13 @@ def download(url, download_dir):
 def single_file_success_download(filepath):
     log = logging.getLogger("conda-repo")
     log.info("File %s saved", filepath)
-    file_counter += 1
     #todo: append to txt file success_download.txt
 
 
 def main():
     #todo: remove pending .tmp-download files
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--thread-number", default=0, help="Number of parallel threads to use for download and hash computation, default is number of processor core + 1")
+    parser.add_argument("-t", "--thread-number", default=0, help="Number of parallel threads to use for download and hash computation, default is number of processors cores + 1")
     parser.add_argument("-u", "--repository-url", default='https://repo.continuum.io/pkgs/main/', help="Repository URL, default https://repo.continuum.io/pkgs/main/")
     parser.add_argument("-l", "--logconfig", default=None, help="Logger config file")
     parser.add_argument('-v', "--verbose",  default=False, action='store_true', help="Increase log verbosity")
@@ -77,10 +75,10 @@ def main():
     repodata_file = "repodata.json"
     remote_repodata_file = repo_url.copy().join(repodata_file)
     optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number == 0 else args.thread_number
-    file_counter = 0
 
     if args.logconfig is not None:
-        logging.config.dictConfig(yaml.load(args.logconfig))
+        with open(args.logconfig) as yamlfile:
+            logging.config.dictConfig(yaml.load(yamlfile))        
     else:
         #levels  = {1: logging.FATAL, 2: logging.ERROR, 3: logging.WARN, 4: logging.INFO, 5: logging.DEBUG}
         if args.verbose:
@@ -100,7 +98,7 @@ def main():
     pool_scheduler = ThreadPoolScheduler(optimal_thread_count)
     #.take(100) \
 
-
+    #print(repo_data['packages'].items())
     Observable.from_(repo_data['packages'].items()) \
         .flat_map( \
             lambda s: Observable.just(s) \
