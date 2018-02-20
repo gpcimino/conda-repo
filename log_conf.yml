@@ -1,0 +1,35 @@
+version: 1
+formatters:
+  simple:
+    format: '%(asctime)s - %(name)s - %(levelname)s [%(filename)s.%(funcName)s %(lineno)d] %(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: simple
+    stream: ext://sys.stdout
+  file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: simple
+    filename: conda_repo.log
+  file_rotate:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: DEBUG
+    formatter: simple
+    filename: conda_repo.log
+    when: midnight
+    interval: 1
+    encoding: utf8
+loggers:
+  urllib3:
+    level: ERROR
+    handlers: [file_rotate, console]
+    propagate: no
+  Rx:
+    level: ERROR
+    handlers: [file_rotate, console]
+    propagate: no
+root:
+  level: DEBUG
+  handlers: [file_rotate, console]

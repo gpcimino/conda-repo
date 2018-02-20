@@ -114,6 +114,6 @@ def main():
 
     input("press a key\n")
 
-    log.info("Downloaded %s files ddddddddddddddddddddddddddddddddd", file_counter)
+    log.info("Downloaded files")
 if __name__ == "__main__":
     main()
