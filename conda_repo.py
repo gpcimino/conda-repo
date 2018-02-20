@@ -1,75 +1,121 @@
 # coding: utf-8
-
+import sys
 from threading import current_thread
 import multiprocessing, time, random
 import requests
 import json
 import shutil
+import argparse
+import logging
+import logging.config
+from functools import partial
 
+import yaml
 from path import Path
 from rx import Observable
+#from rx.core.blockingobservable import BlockingObservable
 from rx.concurrency import ThreadPoolScheduler
+from furl import furl
 
 
-
-def need_download(tup):
-    if tup is None or len(tup) != 2:
-        return False
-    print(tup)
-    print("**********************")
-    filepath = download_dir / tup[0]
+def need_download(filepath, fileinfo, download_dir):
+    log = logging.getLogger("conda-repo")
     exists = filepath.exists()
     if not exists:
+        log.info("File %s exists, no download necessary", filepath)
         return  True
-    ##print("file {} exists {}".format(filepath, exists))
+    log.debug("File %s not exists locally", filepath)
     md5 = filepath.read_hexhash('md5')
-    print("{} md5 {}".format(filepath, md5))
-    bad_crc = md5 != tup[1]['md5']
-    print("Bad crc {}".format(bad_crc))
-    return bad_crc
+    if md5 != fileinfo['md5']:
+        log.error("Bad MD5 CRC for file %s", filepath)
+        return False
+    else:
+        log.debug("CRC OK for file %s", filepath)
+        return True
 
 def download(url, download_dir):
+    log = logging.getLogger("conda-repo")
     try:
-        path = download_dir + url.split("/")[-1] 
-        path_tmp = path + ".conda-tmp"
-        #print("Downalod " + url)
+        filename = url.path.segments[-1]
+        filepath = download_dir / filename
+        filepath_tmp = download_dir / filename + ".tmp-download"
         r = requests.get(url, stream=True)
         if r.status_code == 200:
-            with open(path_tmp, 'wb') as f:
+            with open(filepath_tmp, 'wb') as f:
                 r.raw.decode_content = True
                 shutil.copyfileobj(r.raw, f)
-        shutil.move(path_tmp, path)
-        #print("Save " + path)
-        return path
+        else:
+            log.error("HTTP error %s in download URL %s", r.status_code, url)
+        shutil.move(filepath_tmp, filepath)
+        log.debug("File %s downloaded", filepath)
+        return filepath
     except Exception as ex:
-        print(ex.msg)
+         log.exception("Failure in HTTP download %s",url)
+
+def single_file_success_download(filepath):
+    log = logging.getLogger("conda-repo")
+    log.info("File %s saved", filepath)
+    file_counter += 1
+    #todo: append to txt file success_download.txt
 
 
-repo_url = "https://conda.anaconda.org/asmeurer/linux-64/"
-download_dir = Path("d:\\tmp2\\")
-repo_data_file = download(repo_url + "repodata.json", download_dir)
+def main():
+    #todo: remove pending .tmp-download files
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--thread-number", default=0, help="Number of parallel threads to use for download and hash computation, default is number of processor core + 1")
+    parser.add_argument("-u", "--repository-url", default='https://repo.continuum.io/pkgs/main/', help="Repository URL, default https://repo.continuum.io/pkgs/main/")
+    parser.add_argument("-l", "--logconfig", default=None, help="Logger config file")
+    parser.add_argument('-v', "--verbose",  default=False, action='store_true', help="Increase log verbosity")
+    parser.add_argument("architecture", help="Architecture, one of the follwings: win-64, linux-64,...")
+    parser.add_argument("downloaddir", help="Download directory")
+
+    #prepare input parameters
+    args = parser.parse_args()
+    architecture = args.architecture
+    repo_url = furl(args.repository_url).join(architecture + "/")
+    download_dir = Path(args.downloaddir)
+    repodata_file = "repodata.json"
+    remote_repodata_file = repo_url.copy().join(repodata_file)
+    optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number == 0 else args.thread_number
+    file_counter = 0
+
+    if args.logconfig is not None:
+        logging.config.dictConfig(yaml.load(args.logconfig))
+    else:
+        #levels  = {1: logging.FATAL, 2: logging.ERROR, 3: logging.WARN, 4: logging.INFO, 5: logging.DEBUG}
+        if args.verbose:
+            logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+        else:
+            logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+
+    log = logging.getLogger("conda-repo")
+    log.info("Start Mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
+
+    local_repo_data_file = download(remote_repodata_file, download_dir)
 
 
-#todo: remove pending .conda-tmp files
+    with open(local_repo_data_file) as data_file:    
+        repo_data = json.load(data_file)
 
-with open(repo_data_file) as data_file:    
-    repo_data = json.load(data_file)
-
-
-optimal_thread_count = multiprocessing.cpu_count() + 1
-pool_scheduler = ThreadPoolScheduler(optimal_thread_count)
-
+    pool_scheduler = ThreadPoolScheduler(optimal_thread_count)
     #.take(100) \
 
-Observable.from_(repo_data['packages'].items()) \
-        .flat_map(lambda s: Observable.just(s) \
-        .subscribe_on(pool_scheduler) 
-        .filter(need_download) \
-        .map(lambda s: download(repo_url + s[0], download_dir)) \
-    ) \
-    .subscribe(on_next=lambda i: print("File {} saved in thread {}".format(i, current_thread().name)),
-               on_error=lambda e: print(e),
-               on_completed=lambda: print("PROCESS 1 done!"))
 
-input("Press any key to exit\n")
+    Observable.from_(repo_data['packages'].items()) \
+        .flat_map( \
+            lambda s: Observable.just(s) \
+                .subscribe_on(pool_scheduler) \
+                .filter(lambda s: need_download(download_dir / s[0], s[1], download_dir)) \
+                .map(lambda s: download(repo_url.copy().join(s[0]), download_dir)) \
+        ) \
+        .subscribe( \
+            on_next=single_file_success_download, \
+            on_error=lambda e: log.error("Stop process due to fatal error %s", e), \
+            on_completed=lambda: log.info("Download completed") \
+        )
 
+    input("press a key\n")
+
+    log.info("Downloaded %s files ddddddddddddddddddddddddddddddddd", file_counter)
+if __name__ == "__main__":
+    main()
