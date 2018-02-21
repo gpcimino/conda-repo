@@ -102,3 +102,4 @@ ENV/
 
 #visual studio code
 .vscode/
+conda_official.bat

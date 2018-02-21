@@ -8,10 +8,11 @@ import shutil
 import argparse
 import logging
 import logging.config
+from functools import partial
 
 import yaml
 from path import Path
-from rx import Observable
+from rx import Observable, config
 #from rx.core.blockingobservable import BlockingObservable
 from rx.concurrency import ThreadPoolScheduler
 from furl import furl
@@ -20,17 +21,17 @@ from furl import furl
 def need_download(filepath, fileinfo, download_dir):
     log = logging.getLogger("conda-repo")
     exists = filepath.exists()
-    if not exists:
-        log.info("File %s exists, no download necessary", filepath)
-        return  True
-    log.debug("File %s not exists locally", filepath)
-    md5 = filepath.read_hexhash('md5')
-    if md5 != fileinfo['md5']:
-        log.error("Bad MD5 CRC for file %s", filepath)
-        return False
+    if exists:
+        md5 = filepath.read_hexhash('md5')
+        if md5 != fileinfo['md5']:
+            log.warn("File %s exists but CRC is wrong, download again", filepath)
+            return  True
+        else:
+            log.info("File %s exists and crc is OK, no download necessary", filepath)
+            return  False
     else:
-        log.debug("CRC OK for file %s", filepath)
-        return True
+        log.debug("File %s not exists locally, start download", filepath)
+        return  True
 
 def download(url, download_dir):
     log = logging.getLogger("conda-repo")
@@ -49,12 +50,17 @@ def download(url, download_dir):
         log.debug("File %s downloaded", filepath)
         return filepath
     except Exception as ex:
-         log.exception("Failure in HTTP download %s",url)
+         log.exception("Failure in HTTP download for %s",url)
 
 def single_file_success_download(filepath):
     log = logging.getLogger("conda-repo")
     log.info("File %s saved", filepath)
     #todo: append to txt file success_download.txt
+
+def download_completed(latch):
+    log = logging.getLogger("conda-repo")
+    latch.set()
+    log.info("Download completed")
 
 
 def main():
@@ -71,7 +77,8 @@ def main():
     args = parser.parse_args()
     architecture = args.architecture
     repo_url = furl(args.repository_url).join(architecture + "/")
-    download_dir = Path(args.downloaddir)
+    download_dir = Path(args.downloaddir) / architecture
+    download_dir.mkdir_p()
     repodata_file = "repodata.json"
     remote_repodata_file = repo_url.copy().join(repodata_file)
     optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number == 0 else args.thread_number
@@ -96,9 +103,12 @@ def main():
         repo_data = json.load(data_file)
 
     pool_scheduler = ThreadPoolScheduler(optimal_thread_count)
-    #.take(100) \
 
-    #print(repo_data['packages'].items())
+    latch = config['concurrency'].Event()
+        # .take(100) \
+
+    download_completed_latch = partial(download_completed, latch=latch)
+
     Observable.from_(repo_data['packages'].items()) \
         .flat_map( \
             lambda s: Observable.just(s) \
@@ -109,11 +119,15 @@ def main():
         .subscribe( \
             on_next=single_file_success_download, \
             on_error=lambda e: log.error("Stop process due to fatal error %s", e), \
-            on_completed=lambda: log.info("Download completed") \
+            on_completed=download_completed_latch  \
         )
 
-    input("press a key\n")
-
+    log.info("Wait for threads terminations")
+    latch.wait()
+    #input("press a key\n")
     log.info("Downloaded files")
 if __name__ == "__main__":
     main()
+
+
+
