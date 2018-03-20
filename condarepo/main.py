@@ -63,7 +63,7 @@ def download_completed(latch):
     log.info("Download completed")
 
 
-def run():
+def start():
     #todo: remove pending .tmp-download files
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--thread-number", default=0, help="Number of parallel threads to use for download and hash computation, default is number of processors cores + 1")
@@ -129,8 +129,6 @@ def run():
     #input("press a key\n")
     #log.info("Downloaded %s files", download_ctr)
 
-if __name__ == "__main__":
-    main()
 
 
 
