@@ -102,13 +102,15 @@ def main():
     with open(local_repo_data_file) as data_file:    
         repo_data = json.load(data_file)
 
+    log.info("%s contains %s packages", repodata_file, len(repo_data['packages']))
+
     pool_scheduler = ThreadPoolScheduler(optimal_thread_count)
 
     latch = config['concurrency'].Event()
         # .take(100) \
 
     download_completed_latch = partial(download_completed, latch=latch)
-
+    #download_ctr = 0
     Observable.from_(repo_data['packages'].items()) \
         .flat_map( \
             lambda s: Observable.just(s) \
@@ -125,7 +127,8 @@ def main():
     log.info("Wait for threads terminations")
     latch.wait()
     #input("press a key\n")
-    log.info("Downloaded files")
+    #log.info("Downloaded %s files", download_ctr)
+
 if __name__ == "__main__":
     main()
 
