@@ -27,10 +27,10 @@ def need_download(filepath, fileinfo, download_dir):
             log.warn("File %s exists but CRC is wrong, download again", filepath)
             return  True
         else:
-            log.info("File %s exists and crc is OK, no download necessary", filepath)
+            log.debug("File %s exists and crc is OK, no download necessary", filepath)
             return  False
     else:
-        log.debug("File %s not exists locally, start download", filepath)
+        log.info("File %s not exists locally, start download", filepath)
         return  True
 
 def download(url, download_dir):
@@ -78,7 +78,7 @@ def start():
     architecture = args.architecture
     repo_url = furl(args.repository_url).join(architecture + "/")
     download_dir = Path(args.downloaddir) / architecture
-    download_dir.mkdir_p()
+    download_dir.makedirs_p()
     repodata_file = "repodata.json"
     remote_repodata_file = repo_url.copy().join(repodata_file)
     optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number == 0 else args.thread_number
