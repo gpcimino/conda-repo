@@ -24,10 +24,10 @@ def need_download(filepath, fileinfo, download_dir):
     if exists:
         md5 = filepath.read_hexhash('md5')
         if md5 != fileinfo['md5']:
-            log.warn("File %s exists but CRC is wrong, download again", filepath)
+            log.warn("File %s exists but MD5 hash is wrong, download again", filepath)
             return True
         else:
-            log.debug("File %s exists and crc is OK, no download necessary", filepath)
+            log.debug("File %s exists and MD5 hash is OK, no download necessary", filepath)
             return False
     else:
         log.info("File %s not exists locally, start download", filepath)
@@ -76,7 +76,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--thread-number", default=0, help="Number of parallel threads to use for download and hash computation, default is number of processors cores + 1")
     parser.add_argument("-u", "--repository-url", default='https://repo.continuum.io/pkgs/main/', help="Repository URL, default https://repo.continuum.io/pkgs/main/")
-    parser.add_argument("-l", "--logconfig", default=None, help="Logger config file")
+    parser.add_argument("-l", "--logconfig", default=None, help="YAML logger config file, if provided verbose option is ignored")
     parser.add_argument('-v', "--verbose",  default=False, action='store_true', help="Increase log verbosity")
     parser.add_argument("architecture", help="Architecture, one of the follwings: win-64, linux-64,...")
     parser.add_argument("downloaddir", help="Download directory")
