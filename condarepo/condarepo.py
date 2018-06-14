@@ -104,12 +104,16 @@ def main():
     log = logging.getLogger("conda-repo")
     log.info("Start Mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
 
+
+
     #download remote package list (repodata.json)
     local_repo_data_file = download(remote_repodata_file, download_dir)
     with open(local_repo_data_file) as data_file:
         repo_data = json.load(data_file)
     log.info("%s contains %s packages", repodata_file, len(repo_data['packages']))
 
+    for i in range(10):
+        repo_data['packages'].popitem()
 
     #delete local (stale) packages not present in latest repo_data files
     local_stale_packages = []
@@ -118,7 +122,7 @@ def main():
         .filter(lambda f: f.name != repodata_file) \
         .filter(lambda f: f.name not in repo_data['packages']) \
         .subscribe(lambda p: local_stale_packages.append(p))
-    log.info("%s local packages are not longer included in %s", len(local_stale_packages), repo_url)
+    log.info("%s local packages are no longer included in %s", len(local_stale_packages), repo_url)
 
 
     pool_scheduler = ThreadPoolScheduler(optimal_thread_count)
@@ -147,14 +151,14 @@ def main():
     log.info("Download completed ")
 
     #delete stale packages
-    log.info("Delete %s local packages are not longer included in remote repo", len(local_stale_packages))
+    log.info("Delete %s local packages which are no longer included in remote repo", len(local_stale_packages))
     space_free = 0
     for f in local_stale_packages:
         f = Path(f)
         if f.exists():
+            space_free += f.size
             f.remove_p()
             log.debug("File %s deleted", f)
-            space_free += f.size()
         else:
             log.warning("File %s no longer exists locally", f)
 
