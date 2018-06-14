@@ -97,9 +97,9 @@ def main():
     else:
         #levels  = {1: logging.FATAL, 2: logging.ERROR, 3: logging.WARN, 4: logging.INFO, 5: logging.DEBUG}
         if args.verbose:
-            logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+            logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
         else:
-            logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+            logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
 
     log = logging.getLogger("conda-repo")
     log.info("Start Mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
@@ -162,7 +162,7 @@ def main():
         else:
             log.warning("File %s no longer exists locally", f)
 
-    log.info("Freed %s bytes on disk", space_free)
+    log.info("%s bytes of disk space set free", space_free)
     #input("press a key\n")
     #log.info("Downloaded %s files", download_ctr)
 

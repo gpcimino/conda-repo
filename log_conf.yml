@@ -8,11 +8,6 @@ handlers:
     level: DEBUG
     formatter: simple
     stream: ext://sys.stdout
-  file:
-    class: logging.FileHandler
-    level: DEBUG
-    formatter: simple
-    filename: conda_repo.log
   file_rotate:
     class: logging.handlers.TimedRotatingFileHandler
     level: DEBUG
