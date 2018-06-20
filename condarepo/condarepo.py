@@ -1,5 +1,6 @@
 # coding: utf-8
 import sys
+import os
 from threading import current_thread
 import multiprocessing, time, random
 import requests
@@ -78,94 +79,119 @@ def main():
     parser.add_argument("-u", "--repository-url", default='https://repo.continuum.io/pkgs/main/', help="Repository URL, default https://repo.continuum.io/pkgs/main/")
     parser.add_argument("-l", "--logconfig", default=None, help="YAML logger config file, if provided verbose option is ignored")
     parser.add_argument('-v', "--verbose",  default=False, action='store_true', help="Increase log verbosity")
+    parser.add_argument('-k', "--keeppackages",  default=False, action='store_true', help="Do not delete local packages which are no longer included in remote repo")
+    parser.add_argument('-p', "--pidfile",  default=None, help="File path for file containing process id")
     parser.add_argument("architecture", help="Architecture, one of the follwings: win-64, linux-64,...")
     parser.add_argument("downloaddir", help="Download directory")
 
     #prepare input parameters
     args = parser.parse_args()
-    architecture = args.architecture
-    repo_url = furl(args.repository_url).join(architecture + "/")
-    download_dir = Path(args.downloaddir) / architecture
-    download_dir.makedirs_p()
-    repodata_file = "repodata.json"
-    remote_repodata_file = repo_url.copy().join(repodata_file)
-    optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number == 0 else args.thread_number
 
     if args.logconfig is not None:
         with open(args.logconfig) as yamlfile:
-            logging.config.dictConfig(yaml.load(yamlfile))        
+            logging.config.dictConfig(yaml.load(yamlfile))
     else:
-        #levels  = {1: logging.FATAL, 2: logging.ERROR, 3: logging.WARN, 4: logging.INFO, 5: logging.DEBUG}
+        # levels  = {1: logging.FATAL, 2: logging.ERROR, 3: logging.WARN, 4: logging.INFO, 5: logging.DEBUG}
         if args.verbose:
-            logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
+            logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
+                                format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
         else:
-            logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
+            logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                                format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
+    try:
+        log = logging.getLogger("conda-repo")
 
-    log = logging.getLogger("conda-repo")
-    log.info("Start Mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
+        architecture = args.architecture
+        keeppackages = args.keeppackages
+        pid_file = Path(args.pidfile) if args.pidfile is not None else None
+
+        repo_url = furl(args.repository_url).join(architecture + "/")
+        download_dir = Path(args.downloaddir) / architecture
+        download_dir.makedirs_p()
+        repodata_file = "repodata.json"
+        remote_repodata_file = repo_url.copy().join(repodata_file)
+        optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number == 0 else args.thread_number
+
+        log.info("Preparing mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
+
+        if pid_file is not None:
+            if pid_file.exists():
+                log.fatal("Found previous pid file %s, something was wrong during last run", pid_file)
+                sys.exit(101)
+            else:
+                pid_file.write_text(str(os.getpid()))
+                log.info("Pid file %s created", pid_file)
+
+        #download remote package list (repodata.json)
+        local_repo_data_file = download(remote_repodata_file, download_dir)
+        with open(local_repo_data_file) as data_file:
+            repo_data = json.load(data_file)
+        log.info("%s contains %s packages", repodata_file, len(repo_data['packages']))
+
+        # for i in range(10):
+        #     repo_data['packages'].popitem()
+
+        #delete local (stale) packages not present in latest repo_data files
+        local_stale_packages = []
+        all_local_packages = download_dir.files()
+        log.info("Found %s local packages in %s", len(all_local_packages), download_dir)
+        Observable.from_(all_local_packages) \
+            .map(lambda f: Path(f)) \
+            .filter(lambda f: f.name != repodata_file) \
+            .filter(lambda f: f.name not in repo_data['packages']) \
+            .subscribe(lambda p: local_stale_packages.append(p))
+        log.info("%s local packages are no longer included in %s", len(local_stale_packages), repo_url)
 
 
+        pool_scheduler = ThreadPoolScheduler(optimal_thread_count)
 
-    #download remote package list (repodata.json)
-    local_repo_data_file = download(remote_repodata_file, download_dir)
-    with open(local_repo_data_file) as data_file:
-        repo_data = json.load(data_file)
-    log.info("%s contains %s packages", repodata_file, len(repo_data['packages']))
+        latch = config['concurrency'].Event()
+        download_completed_latch = partial(download_completed, latch=latch)
 
-    for i in range(10):
-        repo_data['packages'].popitem()
+        # .take(100) \
+        #download_ctr = 0
+        Observable.from_(repo_data['packages'].items()) \
+            .flat_map( \
+                lambda s: Observable.just(s) \
+                    .subscribe_on(pool_scheduler) \
+                    .filter(lambda s: need_download(download_dir / s[0], s[1], download_dir)) \
+                    .map(lambda s: download_failsafe(repo_url.copy().join(s[0]), download_dir)) \
+                    .filter(lambda s: s is not None) \
+            ) \
+            .subscribe( \
+                on_next=single_file_success_download, \
+                on_error=lambda e: log.error("Error during download %s", e), \
+                on_completed=download_completed_latch  \
+            )
 
-    #delete local (stale) packages not present in latest repo_data files
-    local_stale_packages = []
-    Observable.from_(download_dir.files()) \
-        .map(lambda f: Path(f)) \
-        .filter(lambda f: f.name != repodata_file) \
-        .filter(lambda f: f.name not in repo_data['packages']) \
-        .subscribe(lambda p: local_stale_packages.append(p))
-    log.info("%s local packages are no longer included in %s", len(local_stale_packages), repo_url)
+        log.info("Start to download packages")
+        latch.wait()
 
-
-    pool_scheduler = ThreadPoolScheduler(optimal_thread_count)
-
-    latch = config['concurrency'].Event()
-    download_completed_latch = partial(download_completed, latch=latch)
-
-    # .take(100) \
-    #download_ctr = 0
-    Observable.from_(repo_data['packages'].items()) \
-        .flat_map( \
-            lambda s: Observable.just(s) \
-                .subscribe_on(pool_scheduler) \
-                .filter(lambda s: need_download(download_dir / s[0], s[1], download_dir)) \
-                .map(lambda s: download_failsafe(repo_url.copy().join(s[0]), download_dir)) \
-                .filter(lambda s: s is not None) \
-        ) \
-        .subscribe( \
-            on_next=single_file_success_download, \
-            on_error=lambda e: log.error("Error during download %s", e), \
-            on_completed=download_completed_latch  \
-        )
-
-    log.info("Wait for threads terminations")
-    latch.wait()
-    log.info("Download completed ")
-
-    #delete stale packages
-    log.info("Delete %s local packages which are no longer included in remote repo", len(local_stale_packages))
-    space_free = 0
-    for f in local_stale_packages:
-        f = Path(f)
-        if f.exists():
-            space_free += f.size
-            f.remove_p()
-            log.debug("File %s deleted", f)
+        #delete stale packages
+        log.info("Delete %s local packages which are no longer included in remote repo", len(local_stale_packages))
+        space_free = 0
+        for f in local_stale_packages:
+            f = Path(f)
+            if f.exists():
+                space_free += f.size
+                if keeppackages:
+                    log.info("File %s is no longer included in remote repos, but it will be kept locally", f)
+                else:
+                    f.remove_p()
+                    log.info("File %s deleted", f)
+            else:
+                log.warning("File %s no longer exists locally", f)
+        if keeppackages:
+            log.info("%s bytes of disk space can be set free if -k switch is used", space_free)
         else:
-            log.warning("File %s no longer exists locally", f)
+            log.info("%s bytes of disk space set free", space_free)
 
-    log.info("%s bytes of disk space set free", space_free)
-    #input("press a key\n")
-    #log.info("Downloaded %s files", download_ctr)
-
+        pid_file.remove_p()
+        log.info("Pid file %s removed", pid_file)
+        log.info("Shutting down gracefully")
+    except Exception as ex:
+        log.exception("General failure")
+        sys.exit(100)
 
 if __name__ == "__main__":
     main()
