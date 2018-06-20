@@ -128,6 +128,16 @@ def main():
             repo_data = json.load(data_file)
         log.info("%s contains %s packages", repodata_file, len(repo_data['packages']))
 
+
+        #look for ".tmp-download" left over files
+        previuos_pending_downloads = download_dir.files("*.tmp-download")
+        if len(previuos_pending_downloads)>0:
+            log.warning(
+                "Presumably previous run of condarepo was abruptly aborted, found %s uncompleted tmp download files", len(previuos_pending_downloads))
+            for f in previuos_pending_downloads:
+                f.remove_p()
+                log.warning("Delete uncompleted tmp download files %s", f)
+
         # for i in range(10):
         #     repo_data['packages'].popitem()
 
@@ -137,6 +147,7 @@ def main():
         log.info("Found %s local packages in %s", len(all_local_packages), download_dir)
         Observable.from_(all_local_packages) \
             .map(lambda f: Path(f)) \
+            .filter(lambda f: f.ext != ".tmp-download") \
             .filter(lambda f: f.name != repodata_file) \
             .filter(lambda f: f.name not in repo_data['packages']) \
             .subscribe(lambda p: local_stale_packages.append(p))
