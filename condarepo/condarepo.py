@@ -20,7 +20,7 @@ from furl import furl
 
 
 def need_download(filepath, fileinfo, download_dir):
-    log = logging.getLogger("conda-repo")
+    log = logging.getLogger("condarepo")
     exists = filepath.exists()
     if exists:
         md5 = filepath.read_hexhash('md5')
@@ -35,7 +35,7 @@ def need_download(filepath, fileinfo, download_dir):
         return True
 
 def download(url, download_dir):
-    log = logging.getLogger("conda-repo")
+    log = logging.getLogger("condarepo")
     try:
         filename = url.path.segments[-1]
         filepath = download_dir / filename
@@ -62,12 +62,12 @@ def download_failsafe(url, download_dir):
         return None
 
 def single_file_success_download(filepath):
-    log = logging.getLogger("conda-repo")
+    log = logging.getLogger("condarepo")
     log.info("File %s saved", filepath)
     #todo: append to txt file success_download.txt
 
 def download_completed(latch):
-    log = logging.getLogger("conda-repo")
+    log = logging.getLogger("condarepo")
     latch.set()
     log.info("Download completed")
 
@@ -99,7 +99,7 @@ def main():
             logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                                 format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
     try:
-        log = logging.getLogger("conda-repo")
+        log = logging.getLogger("condarepo")
 
         architecture = args.architecture
         keeppackages = args.keeppackages
@@ -143,7 +143,9 @@ def main():
 
         #delete local (stale) packages not present in latest repo_data files
         local_stale_packages = []
-        all_local_packages = download_dir.files()
+        #exclude repodata.json
+        all_local_packages = [f for f in download_dir.files() if f != repodata_file]
+
         log.info("Found %s local packages in %s", len(all_local_packages), download_dir)
         Observable.from_(all_local_packages) \
             .map(lambda f: Path(f)) \
@@ -175,7 +177,7 @@ def main():
                 on_completed=download_completed_latch  \
             )
 
-        log.info("Start to download packages")
+        log.info("Start checking MD5 CRC and to download packages")
         latch.wait()
 
         #delete stale packages
