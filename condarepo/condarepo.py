@@ -84,7 +84,7 @@ def update_size(download_size, f):
 def main():
     #todo: remove pending .tmp-download files
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--thread-number", default=0, help="Number of parallel threads to use for download and hash computation, default is number of processors cores + 1")
+    parser.add_argument("-t", "--thread-number", default=0, type=int, help="Number of parallel threads to use for download and hash computation, default is number of processors cores + 1")
     parser.add_argument("-u", "--repository-url", default='https://repo.continuum.io/pkgs/main/', help="Repository URL, default https://repo.continuum.io/pkgs/main/")
     parser.add_argument("-l", "--logconfig", default=None, help="YAML logger config file, if provided verbose option is ignored")
     parser.add_argument('-v', "--verbose",  default=False, action='store_true', help="Increase log verbosity")
@@ -119,7 +119,7 @@ def main():
         download_dir.makedirs_p()
         repodata_file = "repodata.json"
         remote_repodata_file = repo_url.copy().join(repodata_file)
-        optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number == 0 else args.thread_number
+        optimal_thread_count = multiprocessing.cpu_count() + 1 if int(args.thread_number == 0 else args.thread_number
 
         log.info("Preparing mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
 
