@@ -119,7 +119,7 @@ def main():
         download_dir.makedirs_p()
         repodata_file = "repodata.json"
         remote_repodata_file = repo_url.copy().join(repodata_file)
-        optimal_thread_count = multiprocessing.cpu_count() + 1 if int(args.thread_number == 0 else args.thread_number
+        optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number==0 else args.thread_number
 
         log.info("Preparing mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
 
