@@ -46,7 +46,7 @@ def download(url, download_dir):
                 r.raw.decode_content = True
                 shutil.copyfileobj(r.raw, f)
             shutil.move(filepath_tmp, filepath)
-            log.debug("File %s downloaded", filepath)
+            log.debug("File %s downloaded, size %s", filepath, filepath.size)
             return filepath
         else:
             log.error("HTTP error %s in download URL %s", r.status_code, url)
@@ -63,7 +63,7 @@ def download_failsafe(url, download_dir):
 
 def single_file_success_download(filepath):
     log = logging.getLogger("condarepo")
-    log.info("File %s saved", filepath)
+    log.info("File %s saved, size %s", filepath, filepath.size)
     #todo: append to txt file success_download.txt
 
 def download_completed(latch):
@@ -71,6 +71,15 @@ def download_completed(latch):
     latch.set()
     log.info("Download completed")
 
+def update_size(download_size, f):
+    log = logging.getLogger("condarepo")
+    if not f.exists():
+        log.error("Something weired happened, file was downloaded but doesn't exists on disk at %s", f)
+        return
+    t = current_thread().name
+    if t not in download_size:
+        download_size[t] = 0
+    download_size[t] += f.size
 
 def main():
     #todo: remove pending .tmp-download files
@@ -163,6 +172,7 @@ def main():
 
         # .take(100) \
         #download_ctr = 0
+        download_size = {}
         Observable.from_(repo_data['packages'].items()) \
             .flat_map( \
                 lambda s: Observable.just(s) \
@@ -170,6 +180,7 @@ def main():
                     .filter(lambda s: need_download(download_dir / s[0], s[1], download_dir)) \
                     .map(lambda s: download_failsafe(repo_url.copy().join(s[0]), download_dir)) \
                     .filter(lambda s: s is not None) \
+                    .do_action(lambda f: update_size(download_size, f))
             ) \
             .subscribe( \
                 on_next=single_file_success_download, \
@@ -180,6 +191,9 @@ def main():
         log.info("Start checking MD5 CRC and to download packages")
         latch.wait()
 
+        log.info("Download is over")
+        log.info("Totally downloaded %s bytes", sum(download_size.values()))
+        log.debug("Data download for each thread:" + str(download_size))
         #delete stale packages
         log.info("Delete %s local packages which are no longer included in remote repo", len(local_stale_packages))
         space_free = 0
