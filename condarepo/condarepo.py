@@ -195,9 +195,9 @@ def main():
             else:
                 log.warning("File %s no longer exists locally", f)
         if keeppackages:
-            log.info("%s bytes of disk space can be set free if -k switch is used", space_free)
+            log.info("%s bytes of disk space can be freed up if -k switch is used", space_free)
         else:
-            log.info("%s bytes of disk space set free", space_free)
+            log.info("%s bytes of disk space was freed up", space_free)
 
         pid_file.remove_p()
         log.info("Pid file %s removed", pid_file)
