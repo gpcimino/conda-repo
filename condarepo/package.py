@@ -39,7 +39,7 @@ class Package():
             log.info("File %s exists locally", self.local_filepath())
         else:
             try:
-                log.info("Start downloaded, %s", self.url())
+                log.info("Start download, %s", self.url())
                 r = requests.get(self.url(), stream=True, timeout=self._timeout_sec)
                 if r.status_code == 200:
                     with open(self.local_tmp_filepath(), 'wb') as f:
@@ -47,7 +47,7 @@ class Package():
                         shutil.copyfileobj(r.raw, f)
                     if self.md5_ok():
                         shutil.move(self.local_tmp_filepath(), self.local_filepath())
-                        log.info("File %s downloaded, size %s", self.local_filepath(), self.file_size())
+                        log.info("File %s downloaded, size %s, MD5 is OK", self.local_filepath(), self.file_size())
                         return self.local_filepath()
                     else:
                         raise Exception("Local file has invalild CRC")
@@ -82,5 +82,8 @@ class RepoData(Package):
 
     def md5_ok(self):
         return True
+
+    def file_exists_locally(self):
+        return False
 
 

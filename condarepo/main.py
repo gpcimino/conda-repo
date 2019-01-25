@@ -2,75 +2,22 @@
 import sys
 import os
 from threading import current_thread
-import multiprocessing, time, random
-import requests
+import multiprocessing
+
 import json
-import shutil
+
 import argparse
 import logging
 import logging.config
-from functools import partial
+
 
 import yaml
 from path import Path
-from rx import Observable, config
-#from rx.core.blockingobservable import BlockingObservable
-from rx.concurrency import ThreadPoolScheduler
+
 from furl import furl
 
 from condarepo.package import Package, RepoData
 
-def need_download(filepath, fileinfo, download_dir):
-    log = logging.getLogger("condarepo")
-    exists = filepath.exists()
-    if exists:
-        md5 = filepath.read_hexhash('md5')
-        if md5 != fileinfo['md5']:
-            log.warn("File %s exists but MD5 hash is wrong, download again", filepath)
-            return True
-        else:
-            log.debug("File %s exists and MD5 hash is OK, no download necessary", filepath)
-            return False
-    else:
-        log.info("File %s not exists locally, start download", filepath)
-        return True
-
-def download(url, download_dir, timeout_sec=20):
-    log = logging.getLogger("condarepo")
-    try:
-        filename = url.path.segments[-1]
-        filepath = download_dir / filename
-        filepath_tmp = download_dir / filename + ".tmp-download"
-        r = requests.get(url, stream=True, timeout=timeout_sec)
-        if r.status_code == 200:
-            with open(filepath_tmp, 'wb') as f:
-                r.raw.decode_content = True
-                shutil.copyfileobj(r.raw, f)
-            shutil.move(filepath_tmp, filepath)
-            log.debug("File %s downloaded, size %s", filepath, filepath.size)
-            return filepath
-        else:
-            log.error("HTTP error %s in download URL %s", r.status_code, url)
-    except Exception as ex:
-        msg = "Failure in HTTP download for {}".format(url)
-        log.exception(msg)
-        raise Exception(msg) from ex
-
-def download_failsafe(url, download_dir, timeout_sec=20):
-    try:
-        return download(url, download_dir, timeout_sec)
-    except Exception as ex:
-        return None
-
-def single_file_success_download(filepath):
-    log = logging.getLogger("condarepo")
-    log.info("File %s saved, size %s", filepath, filepath.size)
-    #todo: append to txt file success_download.txt
-
-def download_completed(latch):
-    log = logging.getLogger("condarepo")
-    latch.set()
-    log.info("Download completed")
 
 def update_size(download_size, f):
     log = logging.getLogger("condarepo")
@@ -113,15 +60,13 @@ def main():
 
     architecture = args.architecture
     keeppackages = args.keeppackages
-    timeout_sec=args.timeout
+    timeout_sec = args.timeout
 
     pid_file = Path(args.pidfile) if args.pidfile is not None else None
 
     repo_url = furl(args.repository_url).join(architecture + "/")
     download_dir = Path(args.downloaddir) / architecture
     download_dir.makedirs_p()
-    repodata_file = "repodata.json"
-    remote_repodata_file = repo_url.copy().join(repodata_file)
     optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number==0 else args.thread_number
 
     log.info("Preparing mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
@@ -138,13 +83,12 @@ def main():
     r = RepoData(
         str(args.repository_url),
         architecture,
-        local_dir=args.downloaddir
+        local_dir=str(download_dir)
     )
     r.download()
     with open(r.local_filepath()) as data_file:
         repo_data = json.load(data_file)
-    log.info("%s contains %s packages", repodata_file, len(repo_data['packages']))
-
+    log.info("%s contains %s packages", r.local_filepath(), len(repo_data['packages']))
 
 
     #look for ".tmp-download" left over files
@@ -160,7 +104,7 @@ def main():
 
     for name in pkgs:
         try:
-            p = Package(str(args.repository_url), name, local_dir=args.downloaddir, **pkgs[name])
+            p = Package(str(args.repository_url), name, local_dir=str(download_dir), **pkgs[name])
             p.download()
         except Exception as ex:
             log.error("Cannot download {}".format(p))
