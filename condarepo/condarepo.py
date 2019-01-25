@@ -21,14 +21,13 @@ from furl import furl
 
 def need_download(filepath, fileinfo, download_dir):
     log = logging.getLogger("condarepo")
-    exists = filepath.exists()
-    if exists:
+    if filepath.exists():
         md5 = filepath.read_hexhash('md5')
         if md5 != fileinfo['md5']:
-            log.warn("File %s exists but MD5 hash is wrong, download again", filepath)
+            log.warning("File %s exists but MD5 hash is wrong, download again", filepath)
             return True
         else:
-            log.debug("File %s exists and MD5 hash is OK, no download necessary", filepath)
+            log.info("File %s exists and MD5 hash is OK, no download necessary", filepath)
             return False
     else:
         log.info("File %s not exists locally, start download", filepath)
@@ -175,19 +174,31 @@ def main():
         # .take(100) \
         #download_ctr = 0
         download_size = {}
+        # Observable.from_(repo_data['packages'].items()) \
+        #     .flat_map( \
+        #         lambda s: Observable.just(s) \
+        #             .subscribe_on(pool_scheduler) \
+        #             .filter(lambda s: need_download(download_dir / s[0], s[1], download_dir)) \
+        #             .map(lambda s: download_failsafe(repo_url.copy().join(s[0]), download_dir, timeout_sec=timeout_sec)) \
+        #             .filter(lambda s: s is not None) \
+        #             .do_action(lambda f: update_size(download_size, f))
+        #     ) \
+        #     .subscribe( \
+        #         on_next=single_file_success_download, \
+        #         on_error=lambda e: log.error("Error during download %s", e), \
+        #         on_completed=download_completed_latch  \
+        #     )
+
         Observable.from_(repo_data['packages'].items()) \
-            .flat_map( \
-                lambda s: Observable.just(s) \
-                    .subscribe_on(pool_scheduler) \
-                    .filter(lambda s: need_download(download_dir / s[0], s[1], download_dir)) \
-                    .map(lambda s: download_failsafe(repo_url.copy().join(s[0]), download_dir, timeout_sec=timeout_sec)) \
-                    .filter(lambda s: s is not None) \
-                    .do_action(lambda f: update_size(download_size, f))
-            ) \
-            .subscribe( \
-                on_next=single_file_success_download, \
-                on_error=lambda e: log.error("Error during download %s", e), \
-                on_completed=download_completed_latch  \
+            .observe_on(pool_scheduler) \
+            .filter(lambda s: need_download(download_dir / s[0], s[1], download_dir)) \
+            .map(lambda s: download_failsafe(repo_url.copy().join(s[0]), download_dir, timeout_sec=timeout_sec)) \
+            .filter(lambda s: s is not None) \
+            .do_action(lambda f: update_size(download_size, f)) \
+            .subscribe(
+                on_next=single_file_success_download,
+                on_error=lambda e: log.error("Error during download %s", e),
+                on_completed=download_completed_latch
             )
 
         log.info("Start checking MD5 CRC and to download packages")
@@ -214,8 +225,8 @@ def main():
             log.info("%s bytes of disk space can be freed up if -k switch is used", space_free)
         else:
             log.info("%s bytes of disk space was freed up", space_free)
-
-        pid_file.remove_p()
+        if pid_file is not None:
+            pid_file.remove_p()
         log.info("Pid file %s removed", pid_file)
         log.info("Shutting down gracefully")
     except Exception as ex:
