@@ -34,13 +34,13 @@ def need_download(filepath, fileinfo, download_dir):
         log.info("File %s not exists locally, start download", filepath)
         return True
 
-def download(url, download_dir):
+def download(url, download_dir, timeout_sec=20):
     log = logging.getLogger("condarepo")
     try:
         filename = url.path.segments[-1]
         filepath = download_dir / filename
         filepath_tmp = download_dir / filename + ".tmp-download"
-        r = requests.get(url, stream=True)
+        r = requests.get(url, stream=True, timeout=timeout_sec)
         if r.status_code == 200:
             with open(filepath_tmp, 'wb') as f:
                 r.raw.decode_content = True
@@ -55,9 +55,9 @@ def download(url, download_dir):
         log.exception(msg)
         raise Exception(msg) from ex
 
-def download_failsafe(url, download_dir):
+def download_failsafe(url, download_dir, timeout_sec=20):
     try:
-        return download(url, download_dir)
+        return download(url, download_dir, timeout_sec)
     except Exception as ex:
         return None
 
@@ -90,6 +90,7 @@ def main():
     parser.add_argument('-v', "--verbose",  default=False, action='store_true', help="Increase log verbosity")
     parser.add_argument('-k', "--keeppackages",  default=False, action='store_true', help="Do not delete local packages which are no longer included in remote repo")
     parser.add_argument('-p', "--pidfile",  default=None, help="File path for file containing process id")
+    parser.add_argument('-o', "--timeout",  default=10, type=float, help="HTTP network connnection timeout")
     parser.add_argument("architecture", help="Architecture, one of the follwings: win-64, linux-64,...")
     parser.add_argument("downloaddir", help="Download directory")
 
@@ -112,6 +113,8 @@ def main():
 
         architecture = args.architecture
         keeppackages = args.keeppackages
+        timeout_sec=args.timeout
+        
         pid_file = Path(args.pidfile) if args.pidfile is not None else None
 
         repo_url = furl(args.repository_url).join(architecture + "/")
@@ -132,11 +135,10 @@ def main():
                 log.info("Pid file %s created", pid_file)
 
         #download remote package list (repodata.json)
-        local_repo_data_file = download(remote_repodata_file, download_dir)
+        local_repo_data_file = download(remote_repodata_file, download_dir, timeout_sec=timeout_sec)
         with open(local_repo_data_file) as data_file:
             repo_data = json.load(data_file)
         log.info("%s contains %s packages", repodata_file, len(repo_data['packages']))
-
 
         #look for ".tmp-download" left over files
         previuos_pending_downloads = download_dir.files("*.tmp-download")
@@ -178,7 +180,7 @@ def main():
                 lambda s: Observable.just(s) \
                     .subscribe_on(pool_scheduler) \
                     .filter(lambda s: need_download(download_dir / s[0], s[1], download_dir)) \
-                    .map(lambda s: download_failsafe(repo_url.copy().join(s[0]), download_dir)) \
+                    .map(lambda s: download_failsafe(repo_url.copy().join(s[0]), download_dir, timeout_sec=timeout_sec)) \
                     .filter(lambda s: s is not None) \
                     .do_action(lambda f: update_size(download_size, f))
             ) \
