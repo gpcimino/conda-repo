@@ -18,7 +18,7 @@ from rx import Observable, config
 from rx.concurrency import ThreadPoolScheduler
 from furl import furl
 
-from condarepo.package import Package
+from condarepo.package import Package, RepoData
 
 def need_download(filepath, fileinfo, download_dir):
     log = logging.getLogger("condarepo")
@@ -102,7 +102,6 @@ def main():
         with open(args.logconfig) as yamlfile:
             logging.config.dictConfig(yaml.load(yamlfile))
     else:
-        # levels  = {1: logging.FATAL, 2: logging.ERROR, 3: logging.WARN, 4: logging.INFO, 5: logging.DEBUG}
         if args.verbose:
             logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
                                 format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
@@ -135,11 +134,18 @@ def main():
             pid_file.write_text(str(os.getpid()))
             log.info("Pid file %s created", pid_file)
 
-    #download remote package list (repodata.json)
-    local_repo_data_file = download(remote_repodata_file, download_dir, timeout_sec=timeout_sec)
-    with open(local_repo_data_file) as data_file:
+    # #download remote package list (repodata.json)
+    r = RepoData(
+        str(args.repository_url),
+        architecture,
+        local_dir=args.downloaddir
+    )
+    r.download()
+    with open(r.local_filepath()) as data_file:
         repo_data = json.load(data_file)
     log.info("%s contains %s packages", repodata_file, len(repo_data['packages']))
+
+
 
     #look for ".tmp-download" left over files
     previuos_pending_downloads = download_dir.files("*.tmp-download")

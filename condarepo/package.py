@@ -18,7 +18,7 @@ class Package():
         self._timeout_sec = 10
 
     def url(self):
-        b = self._base_url.copy().join(self._info['subdir'] + "x/")
+        b = self._base_url.copy().join(self._info['subdir'] + "/")
         return str(b.copy().join(self.filename))
 
     def local_filepath(self):
@@ -74,5 +74,13 @@ class Package():
 
     def delete_local_file(self):
         self.local_filepath().unlink()
+
+
+class RepoData(Package):
+    def __init__(self, base_url, architecture, local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/")):
+        super().__init__(base_url, "repodata.json", local_dir=local_dir,  **{'subdir': architecture})
+
+    def md5_ok(self):
+        return True
 
 
