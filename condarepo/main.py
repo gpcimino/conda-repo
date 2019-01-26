@@ -18,7 +18,8 @@ from condarepo.pidfile import PidFile
 
 def download(p):
     p.download()
-    return p.file_size()
+
+    return p
 
 def main():
     parser = argparse.ArgumentParser()
@@ -94,6 +95,7 @@ def main():
     pkgs = repo_data['packages']
     pkgs = [Package(str(baseurl), name, local_dir=download_dir, **pkgs[name]) for name in pkgs]
     downloaded = p.map(download, pkgs[:100])
+    print(downloaded)
 
     if pid_file is not None:
         pid_file.cleanup()
