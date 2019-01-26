@@ -16,18 +16,8 @@ from condarepo.package import Package, RepoData
 from condarepo.pidfile import PidFile
 
 
-def update_size(download_size, f):
-    log = logging.getLogger("condarepo")
-    if not f.exists():
-        log.error("Something weired happened, file was downloaded but doesn't exists on disk at %s", f)
-        return
-    t = current_thread().name
-    if t not in download_size:
-        download_size[t] = 0
-    download_size[t] += f.size
 
 def main():
-    #todo: remove pending .tmp-download files
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--thread-number", default=0, type=int, help="Number of parallel threads to use for download and hash computation, default is number of processors cores + 1")
     parser.add_argument("-u", "--repository-url", default='https://repo.continuum.io/pkgs/main/', help="Repository URL, default https://repo.continuum.io/pkgs/main/")
@@ -39,7 +29,7 @@ def main():
     parser.add_argument("architecture", help="Architecture, one of the follwings: win-64, linux-64,...")
     parser.add_argument("downloaddir", help="Download directory")
 
-    #prepare input parameters
+    # prepare input parameters
     args = parser.parse_args()
 
     if args.logconfig is not None:
@@ -81,7 +71,9 @@ def main():
     r.download()
     with open(r.local_filepath()) as data_file:
         repo_data = json.load(data_file)
-    log.info("%s contains %s packages", r.local_filepath(), len(repo_data['packages']))
+    log.info("%s contains %s packages refs", r.local_filepath(), len(repo_data['packages']))
+
+
 
 
     # look for ".tmp-download" left over files
@@ -89,13 +81,30 @@ def main():
         f.unlink()
         log.warning("Presumably previous run of condarepo was abruptly aborted, found and deleted uncompleted tmp download files %s", f)
 
+
+    # count pkgs on disk
+    all_local_packages = [f for f in download_dir.glob('*') if f.suffix != ".json"]
+    log.info("Found %s local packages in %s", len(all_local_packages), download_dir)
+    log.info("Packages to download %s", (len(repo_data['packages'])-len(all_local_packages)))
+
+    #
+    # for name in pkgs:
+    #     try:
+    #         p = Package(str(baseurl), name, local_dir=download_dir, **pkgs[name])
+    #         p.download(timeout_sec)
+    #     except Exception as ex:
+    #         log.error("Cannot download {}".format(p))
+
+    from multiprocessing import Pool
+
+    p = Pool(5)
+
+    def f(p):
+        p.download()
+        return p.file_size()
     pkgs = repo_data['packages']
-    for name in pkgs:
-        try:
-            p = Package(str(baseurl), name, local_dir=download_dir, **pkgs[name])
-            p.download(timeout_sec)
-        except Exception as ex:
-            log.error("Cannot download {}".format(p))
+    pkgs = [Package(str(baseurl), name, local_dir=download_dir, **pkgs[name]) for name in pkgs]
+    p.map(f, pkgs)
 
     if pid_file is not None:
         pid_file.cleanup()
