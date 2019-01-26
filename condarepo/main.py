@@ -14,7 +14,7 @@ from furl import furl
 
 from condarepo.package import Package, RepoData
 from condarepo.pidfile import PidFile
-
+from condarepo.utils import get_tree_size
 
 def download(p):
     p.download()
@@ -87,15 +87,38 @@ def main():
 
 
     # count pkgs on disk
-    all_local_packages = [f for f in download_dir.glob('*') if f.suffix != ".json"]
-    log.info("Found %s local packages in %s", len(all_local_packages), download_dir)
-    log.info("Packages to download %s", (len(repo_data['packages'])-len(all_local_packages)))
+    num_local_pkgs = len([f for f in download_dir.glob('*') if f.suffix != ".json"])
+    num_remote_pkgs=len(repo_data['packages'])
+    log.info("Found %s local packages in %s", num_local_pkgs, download_dir)
+    log.info("Found %s remote packages in %s", num_local_pkgs, repo_url)
+    log.info("Packages to download %s", num_remote_pkgs-num_local_pkgs)
 
     p = Pool(optimal_thread_count)
     pkgs = repo_data['packages']
     pkgs = [Package(str(baseurl), name, local_dir=download_dir, **pkgs[name]) for name in pkgs]
     downloaded = p.map(download, pkgs[:100])
-    print(downloaded)
+
+    num_file_present = sum([1 for p in downloaded if p.file_was_present()])
+    num_local_pkgs_after = len([f for f in download_dir.glob('*') if f.suffix != ".json"])
+    num_file_downloaded = sum([1 for p in downloaded if p.was_downloaded()])
+
+    log.info("[REPORT] Number of remote packages %s", num_remote_pkgs)
+    log.info("[REPORT] Number of local packages present before downlaod %s", num_local_pkgs)
+    log.info("[REPORT] Number of local packages present after downlaod %s", num_local_pkgs_after)
+    log.info("[REPORT] Number of files downloaded %s", num_file_downloaded)
+    log.info("[REPORT] Local repository total size after download %s bytes", get_tree_size(download_dir))
+
+    if num_file_downloaded > 0:
+        num_bytes_downloaded  = sum([p.file_size() for p in downloaded if p.was_downloaded()])
+        total_download_time  = sum([p.duration().total_seconds() for p in downloaded if p.was_downloaded()])
+        max_download_speed = max([p.bandwidth() for p in downloaded if p.was_downloaded()])
+        min_download_speed = min([p.bandwidth() for p in downloaded if p.was_downloaded()])
+        average_bandwidth = num_bytes_downloaded/total_download_time
+        log.info("[REPORT] Bytes downloaded %s", num_bytes_downloaded)
+        log.info("[REPORT] Download time %s seconds", total_download_time)
+        log.info("[REPORT] Max download speed %s bytes/sec", max_download_speed)
+        log.info("[REPORT] Min download speed %s bytes/sec", min_download_speed)
+        log.info("[REPORT] Average downalod speed %s bytes/sec", average_bandwidth)
 
     if pid_file is not None:
         pid_file.cleanup()

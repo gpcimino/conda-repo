@@ -3,7 +3,9 @@ from pathlib import Path
 from furl import furl
 import shutil
 import logging
+from datetime import datetime
 import hashlib
+
 import requests
 import backoff
 
@@ -16,6 +18,7 @@ class Package():
         self._info = kwargs
         self._local_dir = Path(local_dir)
         self._state = 'to be checked'
+        self._duration = None
 
     def url(self):
         b = self._base_url.copy().join(self._info['subdir'] + "/")
@@ -41,7 +44,10 @@ class Package():
         else:
             try:
                 log.info("Start download, %s", self.url())
+                t1 = datetime.utcnow()
                 r = requests.get(self.url(), stream=True, timeout=timeout_sec)
+                t2 = datetime.utcnow()
+                self._duration = t2-t1
                 if r.status_code == 200:
                     with open(self.local_tmp_filepath(), 'wb') as f:
                         r.raw.decode_content = True
@@ -86,6 +92,18 @@ class Package():
             return "{} {}".format(self._state, self.filename)
     def __repr__(self):
         return self.__str__()
+
+    def duration(self):
+        return self._duration
+
+    def bandwidth(self):
+        return float(self.file_size()) / float(self._duration.total_seconds())
+
+    def was_downloaded(self):
+        return self._state == 'downloaded'
+
+    def file_was_present(self):
+        self._state == 'exists locally'
 
 
 
