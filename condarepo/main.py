@@ -1,22 +1,19 @@
 # coding: utf-8
 import sys
 import os
-from threading import current_thread
-import multiprocessing
-
-import json
-
 import argparse
 import logging
 import logging.config
-
+import json
+from pathlib import Path
+import multiprocessing
+from threading import current_thread
 
 import yaml
-from path import Path
-
 from furl import furl
 
 from condarepo.package import Package, RepoData
+from condarepo.pidfile import PidFile
 
 
 def update_size(download_size, f):
@@ -62,8 +59,6 @@ def main():
     keeppackages = args.keeppackages
     timeout_sec = args.timeout
 
-    pid_file = Path(args.pidfile) if args.pidfile is not None else None
-
     repo_url = furl(args.repository_url).join(architecture + "/")
     download_dir = Path(args.downloaddir) / architecture
     download_dir.makedirs_p()
@@ -71,13 +66,10 @@ def main():
 
     log.info("Preparing mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
 
-    if pid_file is not None:
-        if pid_file.exists():
-            log.fatal("Found previous pid file %s, something was wrong during last run", pid_file)
+    if args.pidfile  is not None:
+        pid_file = PidFile(args.pidfile )
+        if not pid_file.can_start():
             sys.exit(101)
-        else:
-            pid_file.write_text(str(os.getpid()))
-            log.info("Pid file %s created", pid_file)
 
     # #download remote package list (repodata.json)
     r = RepoData(
@@ -109,6 +101,8 @@ def main():
         except Exception as ex:
             log.error("Cannot download {}".format(p))
 
+    if pid_file is not None:
+        pid_file.cleanup()
 
 
 
@@ -178,8 +172,7 @@ def main():
     # else:
     #     log.info("%s bytes of disk space was freed up", space_free)
 
-    pid_file.remove_p()
-    log.info("Pid file %s removed", pid_file)
+
     log.info("Shutting down gracefully")
 
 
