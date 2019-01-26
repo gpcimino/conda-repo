@@ -35,7 +35,7 @@ class Package():
     @backoff.on_exception(backoff.expo, (requests.exceptions.RequestException, Exception), max_tries=5)
     def download(self, timeout_sec=10):
         if self.file_exists_locally():
-            log.info("File %s exists locally", self.local_filepath())
+            log.debug("File %s exists locally", self.local_filepath())
         else:
             try:
                 log.info("Start download, %s", self.url())

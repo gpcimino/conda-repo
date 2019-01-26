@@ -16,6 +16,7 @@ class PidFile():
         else:
             self._filepath.write_text(str(os.getpid()))
             log.info("Pid file %s created", self._filepath)
+            return True
 
     def cleanup(self):
         self._filepath.unlink()

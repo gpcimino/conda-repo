@@ -6,8 +6,8 @@ import logging
 import logging.config
 import json
 from pathlib import Path
-import multiprocessing
-from threading import current_thread
+from multiprocessing import Pool, cpu_count
+
 
 import yaml
 from furl import furl
@@ -16,6 +16,9 @@ from condarepo.package import Package, RepoData
 from condarepo.pidfile import PidFile
 
 
+def download(p):
+    p.download()
+    return p.file_size()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -38,10 +41,10 @@ def main():
     else:
         if args.verbose:
             logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
-                                format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
+                                format='%(asctime)s - %(name)s - [%(process)d] %(levelname)s  %(message)s')
         else:
             logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                                format='%(asctime)s - %(name)s - %(levelname)s  %(message)s')
+                                format='%(asctime)s - %(name)s - [%(process)d] %(levelname)s  %(message)s')
 
     log = logging.getLogger("condarepo")
 
@@ -53,7 +56,7 @@ def main():
     download_dir = Path(args.downloaddir) / architecture
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number==0 else args.thread_number
+    optimal_thread_count = cpu_count() + 1 if args.thread_number==0 else args.thread_number
 
     log.info("Preparing mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
 
@@ -61,6 +64,8 @@ def main():
         pid_file = PidFile(args.pidfile )
         if not pid_file.can_start():
             sys.exit(101)
+    else:
+        pid_file = None
 
     # download remote package list (repodata.json)
     r = RepoData(
@@ -74,8 +79,6 @@ def main():
     log.info("%s contains %s packages refs", r.local_filepath(), len(repo_data['packages']))
 
 
-
-
     # look for ".tmp-download" left over files
     for f in download_dir.glob("*.tmp-download"):
         f.unlink()
@@ -87,24 +90,10 @@ def main():
     log.info("Found %s local packages in %s", len(all_local_packages), download_dir)
     log.info("Packages to download %s", (len(repo_data['packages'])-len(all_local_packages)))
 
-    #
-    # for name in pkgs:
-    #     try:
-    #         p = Package(str(baseurl), name, local_dir=download_dir, **pkgs[name])
-    #         p.download(timeout_sec)
-    #     except Exception as ex:
-    #         log.error("Cannot download {}".format(p))
-
-    from multiprocessing import Pool
-
-    p = Pool(5)
-
-    def f(p):
-        p.download()
-        return p.file_size()
+    p = Pool(optimal_thread_count)
     pkgs = repo_data['packages']
     pkgs = [Package(str(baseurl), name, local_dir=download_dir, **pkgs[name]) for name in pkgs]
-    p.map(f, pkgs)
+    downloaded = p.map(download, pkgs[:100])
 
     if pid_file is not None:
         pid_file.cleanup()
