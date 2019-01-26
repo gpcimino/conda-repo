@@ -58,24 +58,25 @@ def main():
     architecture = args.architecture
     keeppackages = args.keeppackages
     timeout_sec = args.timeout
-
+    baseurl = args.repository_url
     repo_url = furl(args.repository_url).join(architecture + "/")
     download_dir = Path(args.downloaddir) / architecture
-    download_dir.makedirs_p()
+    download_dir.mkdir(parents=True, exist_ok=True)
+
     optimal_thread_count = multiprocessing.cpu_count() + 1 if args.thread_number==0 else args.thread_number
 
     log.info("Preparing mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
 
-    if args.pidfile  is not None:
+    if args.pidfile is not None:
         pid_file = PidFile(args.pidfile )
         if not pid_file.can_start():
             sys.exit(101)
 
-    # #download remote package list (repodata.json)
+    # download remote package list (repodata.json)
     r = RepoData(
-        str(args.repository_url),
+        str(baseurl),
         architecture,
-        local_dir=str(download_dir)
+        local_dir=download_dir
     )
     r.download()
     with open(r.local_filepath()) as data_file:
@@ -83,21 +84,16 @@ def main():
     log.info("%s contains %s packages", r.local_filepath(), len(repo_data['packages']))
 
 
-    #look for ".tmp-download" left over files
-    previuos_pending_downloads = download_dir.files("*.tmp-download")
-    if len(previuos_pending_downloads)>0:
-        log.warning(
-            "Presumably previous run of condarepo was abruptly aborted, found %s uncompleted tmp download files", len(previuos_pending_downloads))
-        for f in previuos_pending_downloads:
-            f.remove_p()
-            log.warning("Delete uncompleted tmp download files %s", f)
+    # look for ".tmp-download" left over files
+    for f in download_dir.glob("*.tmp-download"):
+        f.unlink()
+        log.warning("Presumably previous run of condarepo was abruptly aborted, found and deleted uncompleted tmp download files %s", f)
 
     pkgs = repo_data['packages']
-
     for name in pkgs:
         try:
-            p = Package(str(args.repository_url), name, local_dir=str(download_dir), **pkgs[name])
-            p.download()
+            p = Package(str(baseurl), name, local_dir=download_dir, **pkgs[name])
+            p.download(timeout_sec)
         except Exception as ex:
             log.error("Cannot download {}".format(p))
 

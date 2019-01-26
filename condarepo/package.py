@@ -15,7 +15,6 @@ class Package():
         self.filename = filename
         self._info = kwargs
         self._local_dir = Path(local_dir)
-        self._timeout_sec = 10
 
     def url(self):
         b = self._base_url.copy().join(self._info['subdir'] + "/")
@@ -34,13 +33,13 @@ class Package():
         return self.local_filepath().stat().st_size
 
     @backoff.on_exception(backoff.expo, (requests.exceptions.RequestException, Exception), max_tries=5)
-    def download(self):
+    def download(self, timeout_sec=10):
         if self.file_exists_locally():
             log.info("File %s exists locally", self.local_filepath())
         else:
             try:
                 log.info("Start download, %s", self.url())
-                r = requests.get(self.url(), stream=True, timeout=self._timeout_sec)
+                r = requests.get(self.url(), stream=True, timeout=timeout_sec)
                 if r.status_code == 200:
                     with open(self.local_tmp_filepath(), 'wb') as f:
                         r.raw.decode_content = True
