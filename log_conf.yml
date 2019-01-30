@@ -1,7 +1,7 @@
 version: 1
 formatters:
   simple:
-    format: '%(asctime)s - %(name)s - %(process)d [%(levelname)s] %(message)s'
+    format: '%(asctime)s - %(name)s - %(thread)d [%(levelname)s] %(message)s'
 handlers:
   console:
     class: logging.StreamHandler

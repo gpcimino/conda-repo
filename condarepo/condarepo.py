@@ -227,7 +227,7 @@ def main():
             log.info("%s bytes of disk space was freed up", space_free)
         if pid_file is not None:
             pid_file.remove_p()
-        log.info("Pid file %s removed", pid_file)
+            log.info("Pid file %s removed", pid_file)
         log.info("Shutting down gracefully")
     except Exception as ex:
         log.exception("General failure")
