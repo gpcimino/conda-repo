@@ -1,7 +1,9 @@
 version: 1
 formatters:
   simple:
-    format: '%(asctime)s - %(name)s - %(thread)d [%(levelname)s] %(message)s'
+    format: ' %(asctime)s %(process)% [%(levelname)s] %(name)s - %(message)s'
+  rich:
+    format: '%(asctime)s - %(name)s - %(levelname)s [%(filename)s.%(funcName)s %(lineno)d] %(message)s'
 handlers:
   console:
     class: logging.StreamHandler
@@ -10,21 +12,17 @@ handlers:
     stream: ext://sys.stdout
   file_rotate:
     class: logging.handlers.TimedRotatingFileHandler
-    level: DEBUG
+    level: INFO
     formatter: simple
-    filename: conda_repo.log
+    filename: msadb.log
     when: midnight
     interval: 1
     encoding: utf8
+    backupCount: 90
 loggers:
-  urllib3:
-    level: ERROR
-    handlers: [file_rotate, console]
-    propagate: no
-  Rx:
-    level: ERROR
-    handlers: [file_rotate, console]
-    propagate: no
+  condarepo:
+    level: DEBUG
+    propagate: yes
 root:
   level: DEBUG
-  handlers: [file_rotate, console]
+  handlers: [console]

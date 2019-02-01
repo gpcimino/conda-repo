@@ -7,9 +7,75 @@ from datetime import datetime
 import hashlib
 
 import requests
+from requests.exceptions import RequestException
 import backoff
 
 log = logging.getLogger("condarepo")
+
+class Status():
+    pass
+
+
+class DownloadOK(Status):
+    def __str__(self):
+        return "OK"
+
+    def ok(self):
+        return True
+
+
+class FileAlreadyPresent(Status):
+    def __str__(self):
+        return "File present"
+
+    def ok(self):
+        return True
+
+
+class HTTPError(Status):
+    def __init__(self, code):
+        self.code = code
+
+    def __str__(self):
+        return "HTTP Error " + str(self.code)
+
+    def ok(self):
+        return False
+
+
+class BadCRC(Status):
+    def __str__(self):
+        return "Bad CRC"
+
+    def ok(self):
+        return False
+
+
+class ConnectionError(Status):
+    def __init__(self, ex):
+        self.ex = ex
+
+    def __str__(self):
+        return self.ex.msg
+
+    def ok(self):
+        return False
+
+
+class GenericError(Status):
+    def __init__(self, ex):
+        self.ex = ex
+
+    def __str__(self):
+        return self.ex.msg
+
+    def ok(self):
+        return False
+
+class NotStarted(Status):
+    def ok(self):
+        return False
+
 
 class Package():
     def __init__(self, base_url, filename, local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/"), **kwargs):
@@ -17,7 +83,7 @@ class Package():
         self.filename = filename
         self._info = kwargs
         self._local_dir = Path(local_dir)
-        self._state = 'to be checked'
+        self._state = NotStarted()
         self._duration = None
 
     def url(self):
@@ -38,8 +104,9 @@ class Package():
 
     @backoff.on_exception(backoff.expo, (requests.exceptions.RequestException, Exception), max_tries=5)
     def download(self, timeout_sec=10):
+        log.debug("%s", self.local_filepath())
         if self.file_exists_locally():
-            self._state = 'exists locally'
+            self._state = FileAlreadyPresent()
             log.debug("File %s exists locally", self.local_filepath())
         else:
             try:
@@ -55,19 +122,21 @@ class Package():
                     if self.md5_ok():
                         shutil.move(self.local_tmp_filepath(), self.local_filepath())
                         log.info("File %s downloaded, size %s, MD5 is OK", self.local_filepath(), self.file_size())
-                        self._state = 'downloaded'
+                        self._state = DownloadOK()
                         return self.local_filepath()
                     else:
-                        self._state = 'bad crc'
-                        raise Exception("Local file has invalild CRC")
+                        self._state = BadCRC()
+                        raise Exception("Local file has invalid CRC")
                 else:
+                    self._state = HTTPError(r.status_code)
                     log.error("HTTP error %s in download URL %s", r.status_code, self.url())
                     raise Exception("HTTP error %s", r.status_code)
+            except RequestException as rex:
+                self._state = ConnectionError(rex)
+                log.exception("Failure in HTTP download for %s download", self.url())
             except Exception as ex:
-                self._state = 'download failure'
-                msg = "Failure in HTTP download for {}".format(self.url())
-                log.exception(msg)
-                raise Exception(msg) from ex
+                self._state = GenericError(ex)
+                log.exception("Generic error for %s download", self.url())
 
     def download_dir(self):
         return self._local_dir
@@ -86,10 +155,8 @@ class Package():
         self.local_filepath().unlink()
 
     def __str__(self):
-        if self._state == "downloaded":
-            return "{} {} {} bytes".format(self.filename, self._state, self.file_size())
-        else:
-            return "{} {}".format(self._state, self.filename)
+        return "Download operation for file {} result in: {} ".format(self.filename, str(self._state))
+
     def __repr__(self):
         return self.__str__()
 
@@ -104,6 +171,9 @@ class Package():
 
     def file_was_present(self):
         self._state == 'exists locally'
+
+    def state(self):
+        return self._state
 
 
 
