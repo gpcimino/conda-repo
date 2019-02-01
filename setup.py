@@ -20,7 +20,7 @@ if __name__ == '__main__':
             description='Simple mirroring script for Anaconda package repository',
 
 
-            long_description='''Simple mirroring script for Anaconda package repository with full multi-threading support''',
+            long_description='''Simple mirroring script for Anaconda package repository with full multi-process support''',
 
             # The license should be one of the standard open source
             # licenses: https://opensource.org/licenses/alphabetical
@@ -37,6 +37,12 @@ if __name__ == '__main__':
                 'Programming Language :: Python :: 3.5',
                 'Programming Language :: Python :: 3.6',
             ],          
-            keywords='python anaconda conda reactive-programming reactivex repository',
-            scripts=['condarepo/condarepo.py']
+            keywords='python anaconda conda repository mirror multi-process parallel',
+            entry_points={
+                'console_scripts': [
+                    'condarepo = condarepo.main:main',
+
+                ]
+            }
+
         )

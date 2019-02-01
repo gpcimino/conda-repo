@@ -90,7 +90,7 @@ def main():
     num_remote_pkgs=len(repo_data['packages'])
     log.info("Found %s local packages in %s", num_local_pkgs, download_dir)
     log.info("Found %s remote packages in %s", num_remote_pkgs, repo_url)
-    log.info("Packages to download %s", num_remote_pkgs-num_local_pkgs)
+    log.info("Packages to download %s", (num_remote_pkgs-num_local_pkgs))
 
     # start download
     p = Pool(optimal_thread_count)

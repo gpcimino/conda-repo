@@ -102,9 +102,8 @@ class Package():
     def file_size(self):
         return self.local_filepath().stat().st_size
 
-    @backoff.on_exception(backoff.expo, (requests.exceptions.RequestException, Exception), max_tries=5)
+    @backoff.on_exception(backoff.expo, (RequestException, Exception), max_tries=5)
     def download(self, timeout_sec=10):
-        log.debug("%s", self.local_filepath())
         if self.file_exists_locally():
             self._state = FileAlreadyPresent()
             log.debug("File %s exists locally", self.local_filepath())
@@ -134,9 +133,11 @@ class Package():
             except RequestException as rex:
                 self._state = ConnectionError(rex)
                 log.exception("Failure in HTTP download for %s download", self.url())
+                raise rex
             except Exception as ex:
                 self._state = GenericError(ex)
                 log.exception("Generic error for %s download", self.url())
+                raise ex
 
     def download_dir(self):
         return self._local_dir
