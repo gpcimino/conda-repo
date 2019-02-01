@@ -90,7 +90,7 @@ def main():
     num_local_pkgs = len([f for f in download_dir.glob('*') if f.suffix != ".json"])
     num_remote_pkgs=len(repo_data['packages'])
     log.info("Found %s local packages in %s", num_local_pkgs, download_dir)
-    log.info("Found %s remote packages in %s", num_local_pkgs, repo_url)
+    log.info("Found %s remote packages in %s", num_remote_pkgs, repo_url)
     log.info("Packages to download %s", num_remote_pkgs-num_local_pkgs)
 
     p = Pool(optimal_thread_count)
