@@ -5,7 +5,7 @@ formatters:
   rich:
     format: '%(asctime)s - %(name)s - %(levelname)s [%(process)d] %(message)s'
   msgonly:
-    format: '%(asctime)s %(message)s'
+    format: '%(message)s'
 
 handlers:
   console:

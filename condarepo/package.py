@@ -142,12 +142,12 @@ class Package():
                     log.debug("Start download, %s", self.url())
                     t1 = datetime.utcnow()
                     r = requests.get(self.url(), stream=True, timeout=timeout_sec)
-                    t2 = datetime.utcnow()
-                    self._duration = t2-t1
                     if r.status_code == 200:
                         with open(self.local_tmp_filepath(), 'wb') as f:
                             r.raw.decode_content = True
                             shutil.copyfileobj(r.raw, f)
+                        t2 = datetime.utcnow()
+                        self._duration = t2 - t1
                         if self.md5_ok():
                             shutil.move(self.local_tmp_filepath(), self.local_filepath())
                             log.info("File %s downloaded, size %s (%s), MD5 is OK", self.local_filepath(), self.file_size(), self.human_file_size())

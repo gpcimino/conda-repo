@@ -80,17 +80,38 @@ def main():
     r.download(timeout_sec=timeout_sec)
     with open(r.local_filepath()) as data_file:
         repo_data = json.load(data_file)
-    log.info("%s contains %s packages refs", r.local_filepath(), len(repo_data['packages']))
-
+    remote_pkgs = repo_data['packages']
+    # remote_pkgs = {k: remote_pkgs[k] for k in list(remote_pkgs.keys())[:8]}
+    log.info("%s contains %s packages refs", r.local_filepath(), len(remote_pkgs))
 
     # look for ".tmp-download" left over files
     for f in download_dir.glob("*.tmp-download"):
         f.unlink()
         log.warning("Presumably previous run of condarepo was abruptly aborted, found and deleted uncompleted tmp download files %s", f)
 
+    # count local pkgs
+    local_pkgs = [Path(f) for f in download_dir.glob('*') if f.suffix != ".json"]
+
+    # delete stale pkgs
+    stale_pkgs = []
+    for f in local_pkgs:
+        if f.name not in remote_pkgs.keys():
+            stale_pkgs.append(f)
+            if not keeppackages:
+                f.unlink()
+                log.info("Delete local package %s as it is no longer included in remote repository", f)
+            else:
+                log.warning("Local package %s is no longer included in remote repository but is kept locally", f)
+    if len(stale_pkgs)==0:
+        log.info("All local packages are included in remote repository")
+    else:
+        log.info("Deleted %s local package no longer included in remote repository", len(stale_pkgs))
+
+    # recompute local pkgs after stale ones have been deleted
+    local_pkgs = [f for f in local_pkgs if f not in stale_pkgs]
 
     # count pkgs on disk
-    num_local_pkgs = len([f for f in download_dir.glob('*') if f.suffix != ".json"])
+    num_local_pkgs = len(local_pkgs)
     num_remote_pkgs=len(repo_data['packages'])
     log.info("Found %s local packages in %s", num_local_pkgs, download_dir)
     log.info("Found %s remote packages in %s", num_remote_pkgs, repo_url)
@@ -98,13 +119,11 @@ def main():
 
     # start download
     p = Pool(optimal_thread_count)
-    pkgs = repo_data['packages']
-    pkgs = [Package(str(repo_url), name, local_dir=download_dir, **pkgs[name]) for name in pkgs]
+    remote_pkgs = [Package(str(repo_url), name, local_dir=download_dir, **remote_pkgs[name]) for name in remote_pkgs]
     download_func = functools.partial(download, timeout_sec=timeout_sec)
-    downloaded = p.map(download_func, pkgs)
+    downloaded = p.map(download_func, remote_pkgs)
 
     end_time = datetime.now()
-
 
     report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs, start_time, end_time)
 
