@@ -17,7 +17,7 @@ handlers:
     class: logging.handlers.TimedRotatingFileHandler
     level: DEBUG
     formatter: simple
-    filename: msadb.log
+    filename: condarepo.log
     when: midnight
     interval: 1
     encoding: utf8
