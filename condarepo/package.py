@@ -52,7 +52,7 @@ class BadCRC(Status):
         return False
 
 
-class ConnectionError(Status):
+class NetworkError(Status):
     def __init__(self, ex):
         self.ex = ex
 
@@ -93,15 +93,23 @@ class Package():
       "size": 50872,
       "version": "1.1"
 """
-    def __init__(self, base_url, filename, local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/"), **kwargs):
+    def __init__(
+        self,
+        base_url,
+        filename,
+        local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/"),
+        max_retry=10,
+        max_backoff=60,
+        **kwargs
+    ):
         self._base_url = furl(base_url)
         self.filename = filename
         self._info = kwargs
         self._local_dir = Path(local_dir)
         self._state = NotStarted()
         self._duration = None
-        self._max_retry = 1
-        self._maximum_backoff = 60
+        self._max_retry = max_retry
+        self._maximum_backoff = max_backoff
 
     def url(self):
         return str(self._base_url.copy().join(self.filename))
@@ -128,7 +136,8 @@ class Package():
             log.debug("File %s exists locally", self.local_filepath())
         else:
             download_ctr = 0
-            while True:
+            ok = False
+            while not ok:
                 try:
                     log.debug("Start download, %s", self.url())
                     t1 = datetime.utcnow()
@@ -143,8 +152,7 @@ class Package():
                             shutil.move(self.local_tmp_filepath(), self.local_filepath())
                             log.info("File %s downloaded, size %s (%s), MD5 is OK", self.local_filepath(), self.file_size(), self.human_file_size())
                             self._state = DownloadOK()
-                            # OK
-                            break
+                            ok = True
                         else:
                             self._state = BadCRC()
                             self.local_tmp_filepath().unlink()
@@ -153,7 +161,7 @@ class Package():
                         self._state = HTTPError(r.status_code)
                         log.info("HTTP error %s in download URL %s", r.status_code, self.url())
                 except RequestException as rex:
-                    self._state = ConnectionError(rex)
+                    self._state = NetworkError(rex)
                     log.info("Failure in network connection for URL %s download", self.url())
                 except Exception as ex:
                     self._state = GenericError(ex)
@@ -164,7 +172,7 @@ class Package():
                         log.info("Previous download failed, it was download attempt %s", download_ctr)
                         if download_ctr > self._max_retry:
                             log.error("Max number of retry for URL %s reached, abort download", self.url())
-                            break
+                            ok = True
                         wait_time = min((2**download_ctr), self._maximum_backoff)
                         log.info("Wait %s seconds before retry", wait_time)
                         time.sleep(wait_time)

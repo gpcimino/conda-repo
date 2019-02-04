@@ -1,12 +1,12 @@
 # coding: utf-8
 import sys
-import os
 import argparse
 import logging
 import logging.config
 import json
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
+import functools
 
 import yaml
 from furl import furl
@@ -16,13 +16,13 @@ from condarepo.package import Package, RepoData
 from condarepo.pidfile import PidFile
 from condarepo.utils import get_tree_size
 
-def download(p):
+def download(p, timeout_sec):
     log = logging.getLogger("condarepo")
     try:
-        p.download()
+        p.download(timeout_sec=timeout_sec)
         return p
     except Exception as ex:
-        log.error("File download %s aborted after retries. This file will be missing from local repo", p.url())
+        log.exception("File download %s aborted after retries. This file will be missing from local repo", p.url())
 
 def main():
     parser = argparse.ArgumentParser()
@@ -56,7 +56,7 @@ def main():
     keeppackages = args.keeppackages
     timeout_sec = args.timeout
     baseurl = args.repository_url
-    repo_url = furl(args.repository_url).join(architecture + "/")
+    repo_url = furl(baseurl).join(architecture + "/")
     download_dir = Path(args.downloaddir) / architecture
     download_dir.mkdir(parents=True, exist_ok=True)
 
@@ -76,7 +76,7 @@ def main():
         str(repo_url),
         local_dir=download_dir
     )
-    r.download()
+    r.download(timeout_sec=timeout_sec)
     with open(r.local_filepath()) as data_file:
         repo_data = json.load(data_file)
     log.info("%s contains %s packages refs", r.local_filepath(), len(repo_data['packages']))
@@ -99,15 +99,14 @@ def main():
     p = Pool(optimal_thread_count)
     pkgs = repo_data['packages']
     pkgs = [Package(str(repo_url), name, local_dir=download_dir, **pkgs[name]) for name in pkgs]
-    downloaded = p.map(download, pkgs[:100])
+    download_func = functools.partial(download, timeout_sec=timeout_sec)
+    downloaded = p.map(download_func, pkgs)
 
-    num_file_present = sum([1 for p in downloaded if p.file_was_present()])
+    # num_file_present = sum([1 for p in downloaded if p.file_was_present()])
     num_local_pkgs_after = len([f for f in download_dir.glob('*') if f.suffix != ".json"])
     num_file_downloaded = sum([1 for p in downloaded if p.was_downloaded()])
     num_transfer_error = sum([1 for p in downloaded if p.transfer_error()])
     dir_size = get_tree_size(download_dir)
-    incomplete_repo = num_local_pkgs_after < num_remote_pkgs
-    too_many_local_files = num_local_pkgs_after > num_remote_pkgs
 
     errors = {}
     for e in [str(p.state()) for p in downloaded if p.transfer_error()]:
@@ -138,11 +137,17 @@ def main():
         log.info("[REPORT] Average download speed                               %s bytes/sec (%s/sec)", average_bandwidth, humanize.naturalsize(average_bandwidth))
 
     if num_local_pkgs_after < num_remote_pkgs:
+        log.error("[REPORT] ----------------------------------------------------------------------------------------------")
         log.error("[REPORT] Local repository is incomplete")
+        log.error("[REPORT] ----------------------------------------------------------------------------------------------")
     elif num_local_pkgs_after > num_remote_pkgs:
-        log.warning("[REPORT] Too many files is local repository something wrong happened")
+        log.warning("[REPORT] ----------------------------------------------------------------------------------------------")
+        log.warning("[REPORT] Too many files is local repository something strange happened")
+        log.warning("[REPORT] ----------------------------------------------------------------------------------------------")
     else:
-        log.error("[REPORT] Local repository is complete")
+        log.info("[REPORT] ----------------------------------------------------------------------------------------------")
+        log.info("[REPORT] Local repository is complete")
+        log.info("[REPORT] ----------------------------------------------------------------------------------------------")
 
     if pid_file is not None:
         pid_file.cleanup()
