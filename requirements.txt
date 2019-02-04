@@ -2,4 +2,3 @@ furl
 PyYAML
 requests
 humanize
-backoff
