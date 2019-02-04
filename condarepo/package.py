@@ -78,6 +78,20 @@ class NotStarted(Status):
 
 
 class Package():
+    """
+      "build": "py27_0",
+      "build_number": 0,
+      "date": "2013-03-01",
+      "depends": [
+        "python 2.7*"
+      ],
+      "license": "proprietary - Continuum Analytics, Inc.",
+      "license_family": "Proprietary",
+      "md5": "4ced1f80ffe9ed609d55da8dd52b63bd",
+      "name": "_license",
+      "size": 50872,
+      "version": "1.1"
+"""
     def __init__(self, base_url, filename, local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/"), **kwargs):
         self._base_url = furl(base_url)
         self.filename = filename
@@ -87,8 +101,8 @@ class Package():
         self._duration = None
 
     def url(self):
-        b = self._base_url.copy().join(self._info['subdir'] + "/")
-        return str(b.copy().join(self.filename))
+        #b = self._base_url.copy().join(self._info['subdir'] + "/")
+        return str(self._base_url.copy().join(self.filename))
 
     def local_filepath(self):
         return self._local_dir / self.filename
@@ -114,7 +128,8 @@ class Package():
                 r = requests.get(self.url(), stream=True, timeout=timeout_sec)
                 t2 = datetime.utcnow()
                 self._duration = t2-t1
-                if r.status_code == 200:
+                if self.duration_seconds() % 2 == 0:
+                #if r.status_code == 200:
                     with open(self.local_tmp_filepath(), 'wb') as f:
                         r.raw.decode_content = True
                         shutil.copyfileobj(r.raw, f)
@@ -129,14 +144,14 @@ class Package():
                 else:
                     self._state = HTTPError(r.status_code)
                     log.error("HTTP error %s in download URL %s", r.status_code, self.url())
-                    raise Exception("HTTP error %s", r.status_code)
+                    raise Exception("HTTP error %s in download URL %s", r.status_code, self.url())
             except RequestException as rex:
                 self._state = ConnectionError(rex)
-                log.exception("Failure in HTTP download for %s download", self.url())
+                log.debug("Failure in network connection for %s download, retry", self.url())
                 raise rex
             except Exception as ex:
                 self._state = GenericError(ex)
-                log.exception("Generic error for %s download", self.url())
+                log.debug("Generic error for %s download, retry", self.url())
                 raise ex
 
     def download_dir(self):
@@ -150,7 +165,7 @@ class Package():
         return hash_md5.hexdigest()
 
     def md5_ok(self):
-        return self._info['md5'] == self.md5()
+        return self._info['md5'] + 'x' == self.md5()
 
     def delete_local_file(self):
         self.local_filepath().unlink()
@@ -164,14 +179,20 @@ class Package():
     def duration(self):
         return self._duration
 
+    def duration_seconds(self):
+        return self._duration.total_seconds()
+
     def bandwidth(self):
         return float(self.file_size()) / float(self._duration.total_seconds())
 
     def was_downloaded(self):
-        return self._state == 'downloaded'
+        return type(self._state) == DownloadOK
 
     def file_was_present(self):
-        self._state == 'exists locally'
+        return type(self._state) == FileAlreadyPresent
+
+    def transfer_error(self):
+        return not self._state.ok()
 
     def state(self):
         return self._state
@@ -179,8 +200,8 @@ class Package():
 
 
 class RepoData(Package):
-    def __init__(self, base_url, architecture, local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/")):
-        super().__init__(base_url, "repodata.json", local_dir=local_dir,  **{'subdir': architecture})
+    def __init__(self, base_url, local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/")):
+        super().__init__(base_url, "repodata.json", local_dir=local_dir)
 
     def md5_ok(self):
         return True

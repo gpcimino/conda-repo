@@ -8,17 +8,20 @@ import json
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
 
-
 import yaml
 from furl import furl
+import humanize
 
 from condarepo.package import Package, RepoData
 from condarepo.pidfile import PidFile
 from condarepo.utils import get_tree_size
 
 def download(p):
-    p.download()
-    return p
+    log = logging.getLogger("condarepo")
+    try:
+        p.download()
+    except Exception as ex:
+        log.error("File download %s aborted after retries. This file will be missing from local repo", p.url())
 
 def main():
     parser = argparse.ArgumentParser()
@@ -69,8 +72,7 @@ def main():
 
     # download remote package list (repodata.json)
     r = RepoData(
-        str(baseurl),
-        architecture,
+        str(repo_url),
         local_dir=download_dir
     )
     r.download()
@@ -95,40 +97,41 @@ def main():
     # start download
     p = Pool(optimal_thread_count)
     pkgs = repo_data['packages']
-    pkgs = [Package(str(baseurl), name, local_dir=download_dir, **pkgs[name]) for name in pkgs]
+    pkgs = [Package(str(repo_url), name, local_dir=download_dir, **pkgs[name]) for name in pkgs]
     downloaded = p.map(download, pkgs[:100])
 
     num_file_present = sum([1 for p in downloaded if p.file_was_present()])
     num_local_pkgs_after = len([f for f in download_dir.glob('*') if f.suffix != ".json"])
     num_file_downloaded = sum([1 for p in downloaded if p.was_downloaded()])
-    num_transfer_error = sum([1 for p in downloaded if p.tranfer_error()])
+    num_transfer_error = sum([1 for p in downloaded if p.transfer_error()])
+    dir_size = get_tree_size(download_dir)
 
     log.info("[REPORT] Number of remote packages %s", num_remote_pkgs)
     log.info("[REPORT] Number of local packages present before download %s", num_local_pkgs)
     log.info("[REPORT] Number of local packages present after download %s", num_local_pkgs_after)
     log.info("[REPORT] Number of files downloaded %s", num_file_downloaded)
     log.info("[REPORT] Number of files present (no download necessary) %s", num_file_present)
-    log.info("[REPORT] Local repository total size after download %s bytes", get_tree_size(download_dir))
+    log.info("[REPORT] Local repository total size after download %s bytes (%s)", dir_size, humanize.naturalsize(dir_size))
 
     if num_file_downloaded > 0:
         num_bytes_downloaded = sum([p.file_size() for p in downloaded if p.was_downloaded()])
-        total_download_time = sum([p.duration().total_seconds() for p in downloaded if p.was_downloaded()])
+        total_download_time = sum([p.duration_seconds() for p in downloaded if p.was_downloaded()])
         max_download_speed = max([p.bandwidth() for p in downloaded if p.was_downloaded()])
         min_download_speed = min([p.bandwidth() for p in downloaded if p.was_downloaded()])
-        average_bandwidth = num_bytes_downloaded/total_download_time
-        log.info("[REPORT] Bytes downloaded %s", num_bytes_downloaded)
+        average_bandwidth = num_bytes_downloaded / total_download_time
+        log.info("[REPORT] Bytes downloaded %s (%s)", num_bytes_downloaded, humanize.naturalsize(num_bytes_downloaded))
         log.info("[REPORT] Download time %s seconds", total_download_time)
-        log.info("[REPORT] Max download speed %s bytes/sec", max_download_speed)
-        log.info("[REPORT] Min download speed %s bytes/sec", min_download_speed)
-        log.info("[REPORT] Average download speed %s bytes/sec", average_bandwidth)
+        log.info("[REPORT] Max download speed %s bytes/sec (%s/sec)", max_download_speed, humanize.naturalsize(max_download_speed))
+        log.info("[REPORT] Min download speed %s bytes/sec (%s/sec)", min_download_speed, humanize.naturalsize(min_download_speed))
+        log.info("[REPORT] Average download speed %s bytes/sec (%s/sec)", average_bandwidth, humanize.naturalsize(average_bandwidth))
 
     if num_transfer_error > 0:
         log.info("[REPORT] Number of download errors %s", num_transfer_error)
         errors = {}
-        for e in [str(p.state()) for p in downloaded if p.tranfer_error()]:
+        for e in [str(p.state()) for p in downloaded if p.transfer_error()]:
             errors[e] = errors.get(e, 0) + 1
         for k in errors:
-            log.info("[REPORT] {} occurs {} time", k, errors[k])
+            log.info("[REPORT] Error {} occured {} times", k, errors[k])
 
     if pid_file is not None:
         pid_file.cleanup()
