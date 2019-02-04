@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
 import functools
+from datetime import datetime
 
 import yaml
 from furl import furl
@@ -51,6 +52,7 @@ def main():
 
     log = logging.getLogger("condarepo")
 
+    start_time = datetime.now()
     architecture = args.architecture
     keeppackages = args.keeppackages
     timeout_sec = args.timeout
@@ -101,7 +103,10 @@ def main():
     download_func = functools.partial(download, timeout_sec=timeout_sec)
     downloaded = p.map(download_func, pkgs)
 
-    report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs)
+    end_time = datetime.now()
+
+
+    report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs, start_time, end_time)
 
     if pid_file is not None:
         pid_file.cleanup()

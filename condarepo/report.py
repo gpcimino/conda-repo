@@ -7,7 +7,7 @@ from condarepo.utils import get_tree_size
 log = logging.getLogger("condarepo.report")
 
 
-def report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs):
+def report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs, start_time, end_time):
     # num_file_present = sum([1 for p in downloaded if p.file_was_present()])
     num_local_pkgs_after = len([f for f in download_dir.glob('*') if f.suffix != ".json"])
     num_file_downloaded = sum([1 for p in downloaded if p.was_downloaded()])
@@ -18,15 +18,18 @@ def report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs):
     for e in [str(p.state()) for p in downloaded if p.transfer_error()]:
         errors[e] = errors.get(e, 0) + 1
 
-    log.info("Number of remote packages                            %s", num_remote_pkgs)
-    log.info("Number of local packages present before download     %s", num_local_pkgs)
-    log.info("Packages to download                                 %s", (num_remote_pkgs - num_local_pkgs))
-    log.info("Number of files downloaded                           %s", num_file_downloaded)
-    log.info("Number of download errors                            %s", num_transfer_error)
+    log.info("Process start time                                    %s", start_time)
+    log.info("Process end time                                      %s", end_time)
+    log.info("Process duration                                      %s", (end_time-start_time))
+    log.info("Number of remote packages                             %s", num_remote_pkgs)
+    log.info("Number of local packages present before download      %s", num_local_pkgs)
+    log.info("Packages to download                                  %s", (num_remote_pkgs - num_local_pkgs))
+    log.info("Number of files downloaded                            %s", num_file_downloaded)
+    log.info("Number of download errors                             %s", num_transfer_error)
     for k in errors:
-        log.info("Number of %s error                               %s", k, errors[k])
-    log.info("Number of local packages present after download      %s", num_local_pkgs_after)
-    log.info("Local repository total size after download           %s bytes (%s)", dir_size,
+        log.info("Number of %s error                                %s", k, errors[k])
+    log.info("Number of local packages present after download       %s", num_local_pkgs_after)
+    log.info("Local repository total size after download            %s bytes (%s)", dir_size,
              humanize.naturalsize(dir_size))
 
     if num_file_downloaded > 0:
