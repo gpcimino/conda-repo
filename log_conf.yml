@@ -4,6 +4,9 @@ formatters:
     format: '%(asctime)s %(process)% [%(levelname)s] %(name)s - %(message)s'
   rich:
     format: '%(asctime)s - %(name)s - %(levelname)s [%(process)d] %(message)s'
+  msgonly:
+    format: '%(asctime)s %(message)s'
+
 handlers:
   console:
     class: logging.StreamHandler
@@ -19,10 +22,24 @@ handlers:
     interval: 1
     encoding: utf8
     backupCount: 90
+  report:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: DEBUG
+    formatter: msgonly
+    filename: report.txt
+    when: midnight
+    interval: 1
+    encoding: utf8
+    backupCount: 90
 loggers:
   condarepo:
     level: DEBUG
+    propagate: no
+    handlers: [file_rotate, console]
+  condarepo.report:
+    level: DEBUG
     propagate: yes
+    handlers: [report]
 root:
   level: DEBUG
-  handlers: [console, file_rotate]
+  handlers: [console, file_rotate, report]
