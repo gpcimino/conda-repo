@@ -23,14 +23,12 @@ handlers:
     encoding: utf8
     backupCount: 90
   report:
-    class: logging.handlers.TimedRotatingFileHandler
+    class: logging.FileHandler
     level: DEBUG
     formatter: msgonly
-    filename: report.txt
-    when: midnight
-    interval: 1
     encoding: utf8
-    backupCount: 90
+    mode: w
+    filename: report.csv
 loggers:
   condarepo:
     level: DEBUG

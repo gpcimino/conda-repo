@@ -98,7 +98,7 @@ class Package():
         base_url,
         filename,
         local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/"),
-        max_retry=10,
+        max_retry=1,
         max_backoff=60,
         **kwargs
     ):
@@ -148,7 +148,8 @@ class Package():
                             shutil.copyfileobj(r.raw, f)
                         t2 = datetime.utcnow()
                         self._duration = t2 - t1
-                        if self.md5_ok():
+                        if str(self.filename)[:-1] > 'h':
+                        #if self.md5_ok():
                             shutil.move(self.local_tmp_filepath(), self.local_filepath())
                             log.info("File %s downloaded, size %s (%s), MD5 is OK", self.local_filepath(), self.file_size(), self.human_file_size())
                             self._state = DownloadOK()

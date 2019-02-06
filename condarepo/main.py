@@ -14,7 +14,7 @@ from furl import furl
 
 from condarepo.package import Package, RepoData
 from condarepo.pidfile import PidFile
-from condarepo.report import report
+from condarepo.report import Report
 
 def download(p, timeout_sec):
     log = logging.getLogger("condarepo")
@@ -72,12 +72,17 @@ def main():
     else:
         pid_file = None
 
+
     # download remote package list (repodata.json)
     r = RepoData(
         str(repo_url),
         local_dir=download_dir
     )
     r.download(timeout_sec=timeout_sec)
+    if r.transfer_error():
+        log.fatal("Cannot download %s index file from repository", r.local_filepath())
+        sys.exit(1)
+
     with open(r.local_filepath()) as data_file:
         repo_data = json.load(data_file)
     remote_pkgs = repo_data['packages']
@@ -125,7 +130,9 @@ def main():
 
     end_time = datetime.now()
 
-    report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs, start_time, end_time)
+    r = Report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs, start_time, end_time)
+    r.text_report("condarepo")
+    r.csv_report("condarepo.report")
 
     if pid_file is not None:
         pid_file.cleanup()
