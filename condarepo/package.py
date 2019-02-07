@@ -121,7 +121,7 @@ class Package():
         return self._local_dir / self.filename
 
     def local_tmp_filepath(self):
-        return self.local_filepath().with_suffix(".tmp-download")
+        return self.local_filepath().with_suffix(self.local_filepath().suffix + ".tmp-download")
 
     def file_exists_locally(self):
         return self.local_filepath().exists()
@@ -137,7 +137,6 @@ class Package():
         return humanize.naturalsize(self.file_size())
 
     def download(self, timeout_sec=10):
-
         if self.file_exists_locally():
             self._state = FileAlreadyPresent()
             log.debug("File %s exists locally", self.local_filepath())
@@ -163,7 +162,7 @@ class Package():
                         else:
                             self._resume_download = False
                     r = requests.get(self.url(), stream=True, timeout=timeout_sec, headers=resume_header)
-                    if r.status_code == 200:
+                    if r.status_code == 200 or r.status_code == 206:
                         with open(self.local_tmp_filepath(), 'ab' if self._resume_download else 'wb') as f:
                             r.raw.decode_content = True
                             shutil.copyfileobj(r.raw, f)

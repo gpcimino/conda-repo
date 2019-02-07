@@ -82,7 +82,7 @@ def main():
     )
     r.download(timeout_sec=timeout_sec)
     if r.transfer_error():
-        log.fatal("Cannot download %s index file from repository", r.local_filepath())
+        log.fatal("Cannot download %s index file from repository", r.url())
         sys.exit(1)
 
     with open(r.local_filepath()) as data_file:
@@ -132,7 +132,13 @@ def main():
 
 
 
-    remote_pkgs = [Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for name in remote_pkgs if remote_pkgs[name]['size']>100*1024*1024]
+    remote_pkgs = [Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for name in remote_pkgs]
+    #remote_pkgs = [
+    #    Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for
+    #    name in remote_pkgs if remote_pkgs[name]['size'] > 100 * 1024 * 1024]
+    #remote_pkgs = [p for p in remote_pkgs2 if p.filename == 'anaconda-oss-docs-1.0.1-0.tar.bz2']
+    #remote_pkgs = [p for p in remote_pkgs if p.complete_file_size() > 100 * 1024 * 1024]
+
     download_func = functools.partial(download, timeout_sec=timeout_sec)
     downloaded = p.map(download_func, remote_pkgs)
 
