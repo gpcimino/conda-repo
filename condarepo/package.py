@@ -98,8 +98,9 @@ class Package():
         base_url,
         filename,
         local_dir=tempfile.mkdtemp(prefix="condarepo", dir="/tmp/"),
-        max_retry=1,
+        max_retry=8,
         max_backoff=60,
+        resume_download=False,
         **kwargs
     ):
         self._base_url = furl(base_url)
@@ -110,6 +111,8 @@ class Package():
         self._duration = None
         self._max_retry = max_retry
         self._maximum_backoff = max_backoff
+        self._resume_download = resume_download
+
 
     def url(self):
         return str(self._base_url.copy().join(self.filename))
@@ -126,6 +129,10 @@ class Package():
     def file_size(self):
         return self.local_filepath().stat().st_size
 
+    def tmp_file_size(self):
+        return self.local_tmp_filepath().stat().st_size
+
+
     def human_file_size(self):
         return humanize.naturalsize(self.file_size())
 
@@ -141,15 +148,28 @@ class Package():
                 try:
                     log.debug("Start download, %s", self.url())
                     t1 = datetime.utcnow()
-                    r = requests.get(self.url(), stream=True, timeout=timeout_sec)
+
+                    resume_header = {}
+                    if self._resume_download:
+                        if self.local_tmp_filepath().exists():
+                            log.info(
+                                "Resume download for file %s, starting from bytes %s (%s bytes to go)",
+                                self.local_tmp_filepath(),
+                                self.tmp_file_size(),
+                                self.data_to_download()
+                            )
+                            resume_header = {'Range': 'bytes=%d-' % self.tmp_file_size()}
+                            log.debug("Add HTTP header %s", str(resume_header))
+                        else:
+                            self._resume_download = False
+                    r = requests.get(self.url(), stream=True, timeout=timeout_sec, headers=resume_header)
                     if r.status_code == 200:
-                        with open(self.local_tmp_filepath(), 'wb') as f:
+                        with open(self.local_tmp_filepath(), 'ab' if self._resume_download else 'wb') as f:
                             r.raw.decode_content = True
                             shutil.copyfileobj(r.raw, f)
                         t2 = datetime.utcnow()
                         self._duration = t2 - t1
-                        if str(self.filename)[:-1] > 'h':
-                        #if self.md5_ok():
+                        if self.md5_ok():
                             shutil.move(self.local_tmp_filepath(), self.local_filepath())
                             log.info("File %s downloaded, size %s (%s), MD5 is OK", self.local_filepath(), self.file_size(), self.human_file_size())
                             self._state = DownloadOK()
@@ -192,7 +212,12 @@ class Package():
 
     def md5_ok(self):
         return self._info['md5'] == self.md5()
-        #return self._info['md5'] == self.md5()
+
+    def complete_file_size(self):
+        return self._info['size']
+
+    def data_to_download(self):
+        return self.complete_file_size() - self.tmp_file_size()
 
     def delete_local_file(self):
         self.local_filepath().unlink()

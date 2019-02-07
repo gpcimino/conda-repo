@@ -33,6 +33,7 @@ def main():
     parser.add_argument('-k', "--keeppackages",  default=False, action='store_true', help="Do not delete local packages which are no longer included in remote repo")
     parser.add_argument('-p', "--pidfile",  default=None, help="File path for file containing process id")
     parser.add_argument('-o', "--timeout",  default=10, type=float, help="HTTP network connnection timeout")
+    parser.add_argument('-r', "--resumedownload",  default=False, action='store_true', help="Resume previous download using HTTP header Range")
     parser.add_argument("architecture", help="Architecture, one of the follwings: win-64, linux-64,...")
     parser.add_argument("downloaddir", help="Download directory")
 
@@ -57,6 +58,7 @@ def main():
     keeppackages = args.keeppackages
     timeout_sec = args.timeout
     baseurl = args.repository_url
+    resume_download = args.resumedownload
     repo_url = furl(baseurl).join(architecture + "/")
     download_dir = Path(args.downloaddir) / architecture
     download_dir.mkdir(parents=True, exist_ok=True)
@@ -89,10 +91,13 @@ def main():
     # remote_pkgs = {k: remote_pkgs[k] for k in list(remote_pkgs.keys())[:8]}
     log.info("%s contains %s packages refs", r.local_filepath(), len(remote_pkgs))
 
-    # look for ".tmp-download" left over files
+    # look for ".tmp-download" left over files unless use resume download
     for f in download_dir.glob("*.tmp-download"):
-        f.unlink()
-        log.warning("Presumably previous run of condarepo was abruptly aborted, found and deleted uncompleted tmp download files %s", f)
+        if not resume_download:
+            f.unlink()
+            log.warning("Presumably previous run of condarepo was abruptly aborted, found and deleted uncompleted tmp download files %s", f)
+        else:
+            log.info("Do not erase previous uncompleted download %s", f)
 
     # count local pkgs
     local_pkgs = [Path(f) for f in download_dir.glob('*') if f.suffix != ".json"]
@@ -124,7 +129,10 @@ def main():
 
     # start download
     p = Pool(optimal_thread_count)
-    remote_pkgs = [Package(str(repo_url), name, local_dir=download_dir, **remote_pkgs[name]) for name in remote_pkgs]
+
+
+
+    remote_pkgs = [Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for name in remote_pkgs if remote_pkgs[name]['size']>100*1024*1024]
     download_func = functools.partial(download, timeout_sec=timeout_sec)
     downloaded = p.map(download_func, remote_pkgs)
 
