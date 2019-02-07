@@ -158,7 +158,7 @@ class Package():
                                 self.data_to_download()
                             )
                             resume_header = {'Range': 'bytes=%d-' % self.tmp_file_size()}
-                            log.debug("Add HTTP header %s", str(resume_header))
+                            log.debug("Add HTTP header %s for URL ", str(resume_header), self.url())
                         else:
                             self._resume_download = False
                     r = requests.get(self.url(), stream=True, timeout=timeout_sec, headers=resume_header)
@@ -182,19 +182,19 @@ class Package():
                         log.info("HTTP error %s in download URL %s", r.status_code, self.url())
                 except RequestException as rex:
                     self._state = NetworkError(rex)
-                    log.info("Failure in network connection for URL %s download", self.url())
+                    log.info("Failure in network connection for URL %s download: %s", str(rex), self.url())
                 except Exception as ex:
                     self._state = GenericError(ex)
-                    log.debug("Generic error during download of URL %s", self.url())
+                    log.warning("Generic error during download of URL %s:", str(ex), self.url())
                 finally:
                     if not self._state.ok():
                         download_ctr += 1
-                        log.info("Previous download failed, it was download attempt %s", download_ctr)
+                        log.info("Previous download of URL %s failed, it was download attempt %s", self.url(), download_ctr)
                         if download_ctr > self._max_retry:
                             log.error("Max number of retry for URL %s reached, abort download", self.url())
                             ok = True
                         wait_time = min((2**download_ctr), self._maximum_backoff)
-                        log.info("Wait %s seconds before retry", wait_time)
+                        log.info("Wait %s seconds before retry download URL %s", wait_time, self.url())
                         time.sleep(wait_time)
         return self.local_filepath()
 
