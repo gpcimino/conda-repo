@@ -88,7 +88,6 @@ def main():
     with open(r.local_filepath()) as data_file:
         repo_data = json.load(data_file)
     remote_pkgs = repo_data['packages']
-    # remote_pkgs = {k: remote_pkgs[k] for k in list(remote_pkgs.keys())[:8]}
     log.info("%s contains %s packages refs", r.local_filepath(), len(remote_pkgs))
 
     # look for ".tmp-download" left over files unless use resume download
@@ -133,12 +132,6 @@ def main():
 
 
     remote_pkgs = [Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for name in remote_pkgs]
-    #remote_pkgs = [
-    #    Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for
-    #    name in remote_pkgs if remote_pkgs[name]['size'] > 100 * 1024 * 1024]
-    #remote_pkgs = [p for p in remote_pkgs2 if p.filename == 'anaconda-oss-docs-1.0.1-0.tar.bz2']
-    #remote_pkgs = [p for p in remote_pkgs if p.complete_file_size() > 100 * 1024 * 1024]
-
     download_func = functools.partial(download, timeout_sec=timeout_sec)
     downloaded = p.map(download_func, remote_pkgs)
 
