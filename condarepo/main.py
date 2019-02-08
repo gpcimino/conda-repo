@@ -121,9 +121,10 @@ def main():
 
     # recompute local pkgs after stale ones have been deleted
     local_pkgs = [f for f in local_pkgs if f not in stale_pkgs]
+    local_pkgs_exclude_tmp = [f for f in local_pkgs if f.suffix != Package.TMP_FILE_EXT]
 
     # count pkgs on disk
-    num_local_pkgs = len(local_pkgs)
+    num_local_pkgs = len(local_pkgs_exclude_tmp)
     num_remote_pkgs=len(repo_data['packages'])
     log.info("Found %s local packages in %s", num_local_pkgs, download_dir)
     log.info("Found %s remote packages in %s", num_remote_pkgs, repo_url)
