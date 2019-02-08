@@ -161,7 +161,7 @@ class Package():
                                 self.data_to_download()
                             )
                             resume_header = {'Range': 'bytes=%d-' % self.tmp_file_size()}
-                            log.debug("Add HTTP header %s for URL ", str(resume_header), self.url())
+                            log.debug("Add HTTP header %s for URL %s", str(resume_header), self.url())
                         else:
                             self._resume_download = False
                     r = requests.get(self.url(), stream=True, timeout=timeout_sec, headers=resume_header)
@@ -185,10 +185,10 @@ class Package():
                         log.info("HTTP error %s in download URL %s", r.status_code, self.url())
                 except RequestException as rex:
                     self._state = NetworkError(rex)
-                    log.info("Failure in network connection for URL %s download: %s", str(rex), self.url())
+                    log.info("Failure in network connection for URL %s download: %s", self.url(), str(rex))
                 except Exception as ex:
                     self._state = GenericError(ex)
-                    log.warning("Generic error during download of URL %s:", str(ex), self.url())
+                    log.warning("Generic error during download of URL %s: %s", str(ex), self.url())
                 finally:
                     if not self._state.ok():
                         download_ctr += 1
