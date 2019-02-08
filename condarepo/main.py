@@ -91,7 +91,7 @@ def main():
     log.info("%s contains %s packages refs", r.local_filepath(), len(remote_pkgs))
 
     # look for ".tmp-download" left over files unless use resume download
-    for f in download_dir.glob("*.tmp-download"):
+    for f in download_dir.glob(Package.TMP_FILE_EXT):
         if not resume_download:
             f.unlink()
             log.warning("Presumably previous run of condarepo was abruptly aborted, found and deleted uncompleted tmp download files %s", f)
@@ -99,11 +99,14 @@ def main():
             log.info("Do not erase previous uncompleted download %s", f)
 
     # count local pkgs
-    local_pkgs = [Path(f) for f in download_dir.glob('*') if f.suffix != ".json"]
+    local_pkgs = [Path(f) for f in download_dir.glob('*') if f.suffix != ".json" and Path(f).is_file()]
 
     # delete stale pkgs
     stale_pkgs = []
     for f in local_pkgs:
+        # do not delete tmp file download
+        if f.suffix == Package.TMP_FILE_EXT:
+            continue
         if f.name not in remote_pkgs.keys():
             stale_pkgs.append(f)
             if not keeppackages:

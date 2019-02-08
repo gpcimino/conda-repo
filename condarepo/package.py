@@ -93,6 +93,9 @@ class Package():
       "size": 50872,
       "version": "1.1"
 """
+
+    TMP_FILE_EXT = ".tmp-download"
+
     def __init__(
         self,
         base_url,
@@ -121,7 +124,7 @@ class Package():
         return self._local_dir / self.filename
 
     def local_tmp_filepath(self):
-        return self.local_filepath().with_suffix(self.local_filepath().suffix + ".tmp-download")
+        return self.local_filepath().with_suffix(self.local_filepath().suffix + Package.TMP_FILE_EXT)
 
     def file_exists_locally(self):
         return self.local_filepath().exists()
