@@ -4,7 +4,7 @@ if __name__ == '__main__':
     with open("requirements.txt") as rf:
         setuptools.setup(
             name='condarepo',
-            version='0.1',
+            version='0.2.0',
             packages=['condarepo'],
             include_package_data=True,
 
