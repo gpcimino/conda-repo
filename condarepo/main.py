@@ -65,7 +65,7 @@ def main():
 
     optimal_thread_count = cpu_count() + 1 if args.thread_number==0 else args.thread_number
 
-    log.info("Preparing mirroring repository %s to local directory %s using %s threads", repo_url, download_dir, optimal_thread_count)
+    log.info("Preparing mirroring repository %s to local directory %s using %s processes", repo_url, download_dir, optimal_thread_count)
 
     if args.pidfile is not None:
         pid_file = PidFile(args.pidfile )
@@ -96,7 +96,7 @@ def main():
             f.unlink()
             log.warning("Presumably previous run of condarepo was abruptly aborted, found and deleted uncompleted tmp download files %s", f)
         else:
-            log.info("Do not erase previous uncompleted download %s", f)
+            log.info("Do not erase previous uncompleted download %s, will try to resume", f)
 
     # count local pkgs
     local_pkgs = [Path(f) for f in download_dir.glob('*') if f.suffix != ".json" and Path(f).is_file()]
@@ -104,7 +104,7 @@ def main():
     # delete stale pkgs
     stale_pkgs = []
     for f in local_pkgs:
-        # do not delete tmp file download
+        # do not delete tmp file download, if are still here a resume was requested
         if f.suffix == Package.TMP_FILE_EXT:
             continue
         if f.name not in remote_pkgs.keys():
@@ -123,13 +123,6 @@ def main():
     local_pkgs = [f for f in local_pkgs if f not in stale_pkgs]
     local_pkgs_exclude_tmp = [f for f in local_pkgs if f.suffix != Package.TMP_FILE_EXT]
 
-    # remote_pkgs = [
-    #    Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for
-    #    name in remote_pkgs if remote_pkgs[name]['size'] > 100 * 1024 * 1024]
-    #remote_pkgs = [p for p in remote_pkgs if p.filename == 'cudatoolkit-9.0-h13b8566_0.tar.bz2']
-    #remote_pkgs = [p for p in remote_pkgs if p.complete_file_size() > 200 * 1024 * 1024]
-
-
     # count pkgs on disk
     num_local_pkgs = len(local_pkgs_exclude_tmp)
     num_remote_pkgs=len(repo_data['packages'])
@@ -139,16 +132,13 @@ def main():
 
     # start download
     p = Pool(optimal_thread_count)
-
-
-
     remote_pkgs = [Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for name in remote_pkgs]
-    remote_pkgs = [p for p in remote_pkgs if p.complete_file_size() > 200 * 1024 * 1024]
     download_func = functools.partial(download, timeout_sec=timeout_sec)
     downloaded = p.map(download_func, remote_pkgs)
 
     end_time = datetime.now()
 
+    # prepare for reporting
     r = Report(download_dir, downloaded, num_remote_pkgs, num_local_pkgs, start_time, end_time)
     r.text_report("condarepo")
     r.csv_report("condarepo.report")

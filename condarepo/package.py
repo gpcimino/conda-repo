@@ -150,7 +150,6 @@ class Package():
                 try:
                     log.debug("Start download, %s", self.url())
                     t1 = datetime.utcnow()
-
                     resume_header = {}
                     if self._resume_download:
                         if self.local_tmp_filepath().exists():
@@ -162,14 +161,6 @@ class Package():
                             )
                             resume_header = {'Range': 'bytes=%d-' % self.tmp_file_size()}
                             log.debug("Add HTTP header %s for URL %s", str(resume_header), self.url())
-
-                    #https://repo.continuum.io/pkgs/main/linux-64/cudatoolkit-9.0-h13b8566_0.tar.bz2
-                    # if '.json' not in self.url():
-                    #     raise RequestException('test')
-                    #     # import requests_mock
-                    #     # with requests_mock.Mocker() as m:
-                    #     #     m.register_uri('GET', self.url(), exc=requests.exceptions.ConnectTimeout)
-                    # else:
                     r = requests.get(self.url(), stream=True, timeout=timeout_sec, headers=resume_header)
                     if r.status_code == 200 or r.status_code == 206:
                         with open(self.local_tmp_filepath(), 'wb' if resume_header == {} else 'ab') as f:
