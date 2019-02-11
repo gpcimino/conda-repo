@@ -162,8 +162,6 @@ class Package():
                             )
                             resume_header = {'Range': 'bytes=%d-' % self.tmp_file_size()}
                             log.debug("Add HTTP header %s for URL %s", str(resume_header), self.url())
-                        else:
-                            self._resume_download = False
 
                     #https://repo.continuum.io/pkgs/main/linux-64/cudatoolkit-9.0-h13b8566_0.tar.bz2
                     # if '.json' not in self.url():
@@ -174,7 +172,7 @@ class Package():
                     # else:
                     r = requests.get(self.url(), stream=True, timeout=timeout_sec, headers=resume_header)
                     if r.status_code == 200 or r.status_code == 206:
-                        with open(self.local_tmp_filepath(), 'ab' if self._resume_download else 'wb') as f:
+                        with open(self.local_tmp_filepath(), 'wb' if resume_header == {} else 'ab') as f:
                             r.raw.decode_content = True
                             shutil.copyfileobj(r.raw, f)
                         t2 = datetime.utcnow()

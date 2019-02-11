@@ -32,7 +32,7 @@ def main():
     parser.add_argument('-v', "--verbose",  default=False, action='store_true', help="Increase log verbosity")
     parser.add_argument('-k', "--keeppackages",  default=False, action='store_true', help="Do not delete local packages which are no longer included in remote repo")
     parser.add_argument('-p', "--pidfile",  default=None, help="File path for file containing process id")
-    parser.add_argument('-o', "--timeout",  default=10, type=float, help="HTTP network connnection timeout")
+    parser.add_argument('-o', "--timeout",  default=10, type=float, help="HTTP network connnection timeout seconds")
     parser.add_argument('-r', "--resumedownload",  default=False, action='store_true', help="Resume previous download using HTTP header Range")
     parser.add_argument("architecture", help="Architecture, one of the follwings: win-64, linux-64,...")
     parser.add_argument("downloaddir", help="Download directory")
