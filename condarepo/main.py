@@ -123,6 +123,13 @@ def main():
     local_pkgs = [f for f in local_pkgs if f not in stale_pkgs]
     local_pkgs_exclude_tmp = [f for f in local_pkgs if f.suffix != Package.TMP_FILE_EXT]
 
+    # remote_pkgs = [
+    #    Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for
+    #    name in remote_pkgs if remote_pkgs[name]['size'] > 100 * 1024 * 1024]
+    #remote_pkgs = [p for p in remote_pkgs if p.filename == 'cudatoolkit-9.0-h13b8566_0.tar.bz2']
+    #remote_pkgs = [p for p in remote_pkgs if p.complete_file_size() > 200 * 1024 * 1024]
+
+
     # count pkgs on disk
     num_local_pkgs = len(local_pkgs_exclude_tmp)
     num_remote_pkgs=len(repo_data['packages'])
@@ -136,6 +143,7 @@ def main():
 
 
     remote_pkgs = [Package(str(repo_url), name, local_dir=download_dir, resume_download=resume_download, **remote_pkgs[name]) for name in remote_pkgs]
+    remote_pkgs = [p for p in remote_pkgs if p.complete_file_size() > 200 * 1024 * 1024]
     download_func = functools.partial(download, timeout_sec=timeout_sec)
     downloaded = p.map(download_func, remote_pkgs)
 

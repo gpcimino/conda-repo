@@ -145,8 +145,8 @@ class Package():
             log.debug("File %s exists locally", self.local_filepath())
         else:
             download_ctr = 0
-            ok = False
-            while not ok:
+            done = False
+            while not done:
                 try:
                     log.debug("Start download, %s", self.url())
                     t1 = datetime.utcnow()
@@ -164,6 +164,14 @@ class Package():
                             log.debug("Add HTTP header %s for URL %s", str(resume_header), self.url())
                         else:
                             self._resume_download = False
+
+                    #https://repo.continuum.io/pkgs/main/linux-64/cudatoolkit-9.0-h13b8566_0.tar.bz2
+                    # if '.json' not in self.url():
+                    #     raise RequestException('test')
+                    #     # import requests_mock
+                    #     # with requests_mock.Mocker() as m:
+                    #     #     m.register_uri('GET', self.url(), exc=requests.exceptions.ConnectTimeout)
+                    # else:
                     r = requests.get(self.url(), stream=True, timeout=timeout_sec, headers=resume_header)
                     if r.status_code == 200 or r.status_code == 206:
                         with open(self.local_tmp_filepath(), 'ab' if self._resume_download else 'wb') as f:
@@ -175,27 +183,28 @@ class Package():
                             shutil.move(self.local_tmp_filepath(), self.local_filepath())
                             log.info("File %s downloaded, size %s (%s), MD5 is OK", self.local_filepath(), self.file_size(), self.human_file_size())
                             self._state = DownloadOK()
-                            ok = True
+                            done = True
                         else:
                             self._state = BadCRC()
                             self.local_tmp_filepath().unlink()
-                            log.info("File %s downloaded but has broken CRC, file removed ", self.local_tmp_filepath())
+                            log.error("File %s downloaded but has broken CRC, file removed ", self.local_tmp_filepath())
                     else:
                         self._state = HTTPError(r.status_code)
-                        log.info("HTTP error %s in download URL %s", r.status_code, self.url())
+                        log.error("HTTP error %s in download URL %s", r.status_code, self.url())
                 except RequestException as rex:
                     self._state = NetworkError(rex)
-                    log.info("Failure in network connection for URL %s download: %s", self.url(), str(rex))
+                    log.exception("Failure in network connection for URL %s download", self.url())
                 except Exception as ex:
                     self._state = GenericError(ex)
-                    log.warning("Generic error during download of URL %s: %s", str(ex), self.url())
+                    log.exception("Generic error during download of URL %s", self.url())
                 finally:
                     if not self._state.ok():
+                        done = False
                         download_ctr += 1
                         log.info("Previous download of URL %s failed, it was download attempt %s", self.url(), download_ctr)
                         if download_ctr > self._max_retry:
                             log.error("Max number of retry for URL %s reached, abort download", self.url())
-                            ok = True
+                            done = True
                         wait_time = min((2**download_ctr), self._maximum_backoff)
                         log.info("Wait %s seconds before retry download URL %s", wait_time, self.url())
                         time.sleep(wait_time)
