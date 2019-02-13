@@ -1,9 +1,12 @@
 version: 1
 formatters:
   simple:
-    format: ' %(asctime)s %(process)% [%(levelname)s] %(name)s - %(message)s'
+    format: '%(asctime)s %(process)% [%(levelname)s] %(name)s - %(message)s'
   rich:
-    format: '%(asctime)s - %(name)s - %(levelname)s [%(filename)s.%(funcName)s %(lineno)d] %(message)s'
+    format: '%(asctime)s - %(name)s - %(levelname)s [%(process)d] %(message)s'
+  msgonly:
+    format: '%(message)s'
+
 handlers:
   console:
     class: logging.StreamHandler
@@ -12,9 +15,18 @@ handlers:
     stream: ext://sys.stdout
   file_rotate:
     class: logging.handlers.TimedRotatingFileHandler
-    level: INFO
+    level: DEBUG
     formatter: simple
-    filename: msadb.log
+    filename: condarepo.log
+    when: midnight
+    interval: 1
+    encoding: utf8
+    backupCount: 90
+  report:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: DEBUG
+    formatter: msgonly
+    filename: report.txt
     when: midnight
     interval: 1
     encoding: utf8
@@ -22,7 +34,12 @@ handlers:
 loggers:
   condarepo:
     level: DEBUG
+    propagate: no
+    handlers: [file_rotate, console]
+  condarepo.report:
+    level: DEBUG
     propagate: yes
+    handlers: [report]
 root:
   level: DEBUG
-  handlers: [console]
+  handlers: [console, file_rotate, report]

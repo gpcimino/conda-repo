@@ -1,5 +1,4 @@
-furl==1.0.1
-path.py==11.0
-PyYAML==3.12
-requests==2.18.4
-Rx==1.6.1
+furl
+PyYAML
+requests
+humanize
