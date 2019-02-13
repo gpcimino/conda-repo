@@ -42,6 +42,7 @@ def main():
 
     if args.logconfig is not None:
         with open(args.logconfig) as yamlfile:
+            #todo: use safe load to fix https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-18342
             logging.config.dictConfig(yaml.load(yamlfile))
     else:
         if args.verbose:
